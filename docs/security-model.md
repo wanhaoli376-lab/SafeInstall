@@ -89,10 +89,16 @@ created exclusively with restricted permissions. Existing files require confirma
 replaced through a temporary file in the same directory; symlink destinations are rejected.
 
 Portable packages are platform-specific one-folder builds. Built-in YAML rule data is collected,
-while the optional OpenAI SDK is excluded. The artifact workflow uses pinned actions and read-only
-repository permission, is not triggered by pull requests, receives no product/API secrets, and
-does not publish a GitHub Release. Windows packaged startup is locally smoke-tested; macOS signing
-and notarization remain unresolved distribution work.
+while the optional OpenAI SDK is excluded. Release builds use reviewed Python 3.11 constraints.
+The workflow is not triggered by pull requests, uses full-SHA action pins, and gives build/metadata
+jobs only `contents: read`; only the tag-only publish job receives `contents: write`.
+
+Windows packaging performs startup plus local folder/ZIP smoke scans after removing
+`OPENAI_API_KEY`. Publication requires both platform artifacts, a CycloneDX SBOM from the
+constrained Python application dependency environment, and SHA-256 over the exact final ZIPs.
+The SBOM does not claim binary- or OS-level completeness. Assets are first uploaded to a private draft, downloaded,
+and revalidated before the draft becomes a prerelease. Windows code signing, macOS Developer ID
+signing, and notarization remain unresolved distribution risks and are disclosed to users.
 
 ## Non-goals and residual risk
 

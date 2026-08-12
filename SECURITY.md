@@ -6,8 +6,10 @@ therefore be high impact.
 
 ## Supported versions
 
-Until the first stable release, only the latest commit on `main` is supported. Published
-release support will be documented here when releases exist.
+Until the first stable release, security fixes target the latest commit on `main` and the latest
+public Alpha prerelease. Older Alpha assets may be superseded without a long-term support window.
+The desktop builds are experimental and unsigned; that distribution limitation is separate from
+SafeInstall's static-analysis security boundary.
 
 ## Reporting a vulnerability
 

@@ -5,6 +5,32 @@ versioning after its first stable release.
 
 ## [Unreleased]
 
+## [0.2.0a1] - 2026-08-12
+
+### Added
+
+- First public desktop Alpha Release with stable Windows x64 and unsigned macOS asset names.
+- SHA-256 checksums for the final ZIP assets and a CycloneDX constrained Python-dependency SBOM.
+- Public Alpha testing guide, maintainer release checklist, real GUI screenshots, and sanitized
+  Alpha/false-positive feedback forms.
+
+### Changed
+
+- Release builds now use reviewed Python 3.11 constraints instead of resolving critical desktop
+  and packaging dependencies from floating ranges.
+- The release workflow separates read-only Windows/macOS builds and metadata verification from
+  the only job allowed to create a GitHub prerelease.
+- Windows packaging now performs real local folder and ZIP smoke scans without an API key,
+  including paths with spaces and non-ASCII characters.
+
+### Security
+
+- Publication uses a private draft, verifies the exact four server-side assets and their hashes,
+  and only then exposes the Release as a prerelease.
+- Release workflow triggers, action pins, permissions, AI-key absence, unsigned artifact naming,
+  checksums, and SBOM requirements are covered by regression tests.
+- Portable builds continue to exclude the OpenAI SDK and do not execute scanned targets.
+
 ## [0.2.0a0] - 2026-08-12
 
 ### Added

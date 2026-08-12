@@ -51,12 +51,12 @@ positive fixtures. Stable IDs and evidence requirements make these contributions
 | Plugin | Explicit trusted scanner framework implemented; distribution/store planned |
 | Skill | `SKILL.md` identification, capability hints, and prompt-pattern review implemented |
 | CLI | Implemented |
-| Desktop GUI | Experimental bilingual interface implemented; Windows portable recipe validated |
+| Desktop GUI | Experimental bilingual interface implemented; public unsigned Alpha builds available |
 | Developer tools | JSON/Markdown output, rules, plugins, tests implemented |
 | Automation | JSON output and GitHub CI implemented; hosted issue/PR automation planned |
 | Code analysis | Implemented for supported text languages and manifests |
 | Optional code-execution sandbox | Planned; no target execution exists in v0.2 alpha |
-| Third-party contributions | Governance and extension docs implemented; ecosystem grows after launch |
+| Third-party contributions | Governance, feedback templates, and extension docs implemented |
 | MCP | Config/server/tool capability scanning implemented; protocol-wide semantic analysis planned |
 
 ## 7. SafeInstall's own security risks

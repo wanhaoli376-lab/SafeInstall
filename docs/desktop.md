@@ -25,9 +25,10 @@ core report renderers and their final redaction pass.
 Build on 64-bit Windows with Python 3.11:
 
 ```console
-python -m pip install -e ".[gui,packaging]"
+python -m pip install -c constraints/release-python311.txt -e ".[gui,packaging]"
 python -m PyInstaller --noconfirm --clean packaging/safeinstall.spec
 dist\SafeInstall\SafeInstall.exe --smoke-test -platform offscreen
+dist\SafeInstall\SafeInstall.exe --smoke-scan examples\safe-project -platform offscreen
 ```
 
 The result is a one-folder build under `dist/SafeInstall/`. Distribute the complete folder inside
@@ -38,6 +39,10 @@ itself into a temporary directory on every launch.
 The build spec includes the data-only built-in YAML rules and excludes the optional `openai`
 package. A successful smoke test proves that the packaged Qt application can start and close; it
 is not a malware-free certification of the build environment.
+
+The public Alpha executable is currently unsigned. Windows SmartScreen may display a reputation
+warning. Do not tell users to disable Defender or permanently disable SmartScreen. Authenticode
+signing is future work and must not be claimed until a signed asset is independently verified.
 
 Maintainers can also run the private packaging diagnostic
 `SafeInstall.exe --smoke-scan <local-target> -platform offscreen`. It completes one real,
@@ -55,13 +60,27 @@ notarized**. PyInstaller may apply ad-hoc signing required by the local toolchai
 still receive a Gatekeeper warning. Do not describe the artifact as signed or notarized until a
 reviewed signing workflow exists.
 
-## GitHub artifacts
+## GitHub Alpha Release
 
 `.github/workflows/release.yml` runs only on manual dispatch or an alpha tag. It builds Windows
-and macOS artifacts with `contents: read`, pinned actions, no product/API secrets, and no Release
-publishing step. Artifacts have short retention and are development outputs. Publishing a formal
-GitHub Release, MSI/DMG installer, Developer ID signature, notarization, or automatic updater is
-planned work and requires a separate security review.
+and macOS inputs with `contents: read`, pinned actions, reviewed release constraints, and no
+product/API secrets. Manual dispatch is a build-only rehearsal. On a matching tag, one separate
+publish job receives only `contents: write`.
+
+Before publication the workflow requires the Windows and macOS builds, Windows folder/ZIP smoke
+scans without `OPENAI_API_KEY`, the macOS smoke scan, a CycloneDX SBOM from a constrained Python
+application dependency environment, and SHA-256 hashes over the two final ZIP files. The SBOM is
+not a binary- or OS-component inventory. The workflow creates a private draft and verifies the
+server-side files, then exposes the draft as a prerelease. The stable assets are:
+
+- `SafeInstall-Windows-x64.zip`
+- `SafeInstall-macOS-unsigned.zip`
+- `SHA256SUMS.txt`
+- `SBOM.json`
+
+Both platform binaries remain unsigned. MSI/DMG installers, Windows Authenticode, Apple Developer
+ID signing, notarization, and automatic updating are planned work. See
+[Maintainer release process](maintainer-release.md).
 
 ## Planned binary boundary
 

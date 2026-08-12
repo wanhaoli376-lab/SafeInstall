@@ -58,6 +58,13 @@ read-only permissions, pinned actions, no `pull_request_target`, no deployment p
 repository/API secrets. Treat contributor tests, build configuration, package hooks, snapshots,
 and generated fixtures as untrusted even when the production diff looks small.
 
+For a Release, trace the complete chain from tag to constrained dependency resolution,
+PyInstaller output, artifact upload/download, checksum/SBOM generation, draft creation, and final
+publication. Confirm that build jobs are read-only, the publish job is tag-only, exact artifacts
+come from the same successful workflow run, SHA-256 covers the final ZIPs, and server-side assets
+are re-downloaded before the draft is exposed. Treat a stale artifact mix-up or unexpected build
+dependency as a supply-chain finding, not merely a packaging error.
+
 ### AI analysis and prompt isolation
 
 The attack chain to examine is:

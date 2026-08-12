@@ -56,6 +56,11 @@ handling, prompt isolation, and behavior on an untrusted pull request.
 Workflow tests for outside contributions must not receive `OPENAI_API_KEY`, elevated
 `GITHUB_TOKEN` permissions, deployment credentials, or other repository secrets.
 
+Release dependency pins live in `constraints/release-python311.txt`; development ranges remain in
+`pyproject.toml`. Any change to release pins, PyInstaller inputs, SBOM generation, checksums, asset
+names, or publication permissions requires a build-only workflow rehearsal and review against
+[`docs/maintainer-release.md`](docs/maintainer-release.md).
+
 ## Pull requests
 
 Keep each pull request focused. Complete the template, include tests, document user-visible

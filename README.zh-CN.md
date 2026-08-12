@@ -11,6 +11,25 @@ SafeInstall 默认在本地做静态分析：不安装目标依赖，不导入�
 > [!IMPORTANT]
 > SafeInstall 提供的是风险分析，不是“无恶意软件”证明。它不能替代杀毒软件、沙箱、人工代码审查，也不能替代对软件来源的判断。
 
+![SafeInstall 桌面主页](docs/images/safeinstall-home.png)
+
+## 下载
+
+**SafeInstall v0.2.0-alpha.1 是面向公开测试的预发布版本，当前优先推荐 Windows x64。**
+
+### Windows x64
+
+前往 [v0.2.0-alpha.1 Release 页面](https://github.com/wanhaoli376-lab/SafeInstall/releases/tag/v0.2.0-alpha.1)
+下载 `SafeInstall-Windows-x64.zip`，解压后双击 `SafeInstall/SafeInstall.exe`。把文件、文件夹或受支持的压缩包拖入窗口，再点击“开始安全检查”即可。
+
+本地扫描不需要 Python、pip、Git、账号或 OpenAI API Key。当前 Alpha 二进制尚未签名，新项目也还没有足够的信誉积累，因此 Windows SmartScreen 可能提示风险。SafeInstall 不建议关闭 Microsoft Defender，也不建议永久关闭 SmartScreen。
+
+### macOS（实验性）
+
+Release 页面同时提供 `SafeInstall-macOS-unsigned.zip`。这个开发构建尚未签名，也没有经过 Apple Notarization，macOS Gatekeeper 可能显示警告。本次 Alpha 仍以 Windows 为优先测试平台。
+
+可以使用 Release 中的 `SHA256SUMS.txt` 校验下载文件；`SBOM.json` 是发布元数据任务基于固定依赖生成的 Python 应用依赖 CycloneDX 清单，并不是两个平台 portable 二进制或操作系统组件的完整清单。
+
 ## 为什么需要 SafeInstall
 
 `curl example.com/install.sh | bash` 看起来只是一行安装命令，但它隐藏了一个关键事实：程序会从网络下载内容，并立刻交给 Shell 执行。类似地，`subprocess.run(...)`、npm 的 `postinstall`，或一个能够访问文件系统的 MCP Tool，可能完全合理，同时也确实拥有较大的系统权限。
@@ -35,7 +54,7 @@ SafeInstall 会把安全报告中经常混在一起的三类信息拆开：
 - 提供严格的 YAML Rule Engine 和显式注册的 Scanner Plugin 框架
 - 提供有边界、需主动开启的 OpenAI 风险解释
 
-## 桌面应用
+## 工作方式
 
 SafeInstall 现在包含一个**实验性桌面界面**。用户可以选择或拖入文件、受支持的压缩包、文件夹，也可以粘贴公开 GitHub 仓库地址。
 
@@ -49,9 +68,17 @@ SafeInstall 现在包含一个**实验性桌面界面**。用户可以选择或�
 
 本地目标只在你的电脑上分析，不需要账号、Telemetry、OpenAI 账号或 OpenAI API Key。AI 解释默认关闭。桌面界面通过 Worker Thread 调用与 CLI 相同的 `scan_target()`，不会另写扫描器，也不会削弱静态分析边界。
 
-Windows portable 构建流程已经实现并在本机验证，但只有 GitHub Releases 真正出现附件后，本文才会提供下载入口。当前构建方式与平台状态见[桌面与打包文档](docs/desktop.md)。
+公开 Alpha 提供 Windows portable 构建和实验性的未签名 macOS 构建。平台状态与完整安全边界见[桌面与打包文档](docs/desktop.md)。
 
-## 安装
+### 风险概览
+
+![SafeInstall 风险概览](docs/images/safeinstall-result.png)
+
+### 技术证据
+
+![SafeInstall 技术详情](docs/images/safeinstall-technical-details.png)
+
+## 开发者安装
 
 SafeInstall 目前尚未发布到 PyPI。请从可信的 GitHub 仓库克隆并安装：
 
@@ -134,7 +161,7 @@ safeinstall scan ./examples/risky-project
 | 已支持 | Python、Shell、PowerShell、Batch、JavaScript/Node.js |
 | 已支持 | Python/npm Manifest、Lockfile、安装脚本、Dockerfile、GitHub Actions |
 | 已支持 | Skill、Plugin Manifest、MCP 配置/Server、Prompt 类 Markdown |
-| 实验性 | 桌面 GUI、Windows portable 打包、外部 YAML 规则、可信的进程内 Scanner Plugin、可选 AI 摘要 |
+| 实验性 | 桌面 GUI、未签名的 Windows/macOS Alpha 构建、外部 YAML 规则、可信的进程内 Scanner Plugin、可选 AI 摘要 |
 | 计划中 | `.exe`、`.msi`、`.dmg`、`.pkg` 深度分析，以及 Go、Rust、APK、Office Macro |
 | 计划中 | 隔离执行沙箱、签名与 notarize 后的安装包、更新检查和二进制分析 |
 
@@ -181,7 +208,7 @@ python -m PyInstaller --noconfirm --clean packaging/safeinstall.spec
 ## 路线图
 
 - **v0.1 alpha：** CLI、安全加载器、核心语言扫描、Secret、报告和示例
-- **v0.2 alpha：** 实验性桌面 GUI、拖拽、本地 Worker 扫描、双语结果、报告导出和 portable artifacts
+- **v0.2 alpha：** 实验性桌面 GUI、拖拽、本地 Worker 扫描、双语结果、报告导出、公开 portable 构建、校验和与 CycloneDX SBOM
 - **v0.3：** 更完整的 Skill/Plugin/MCP 语义，以及可选 AI 行为链复核
 - **v0.4：** 文档化 Plugin SDK、更丰富的社区规则包与打包加固
 - **v1.0：** 稳定的 Rule/Plugin API 与正式 CI 集成
@@ -193,5 +220,7 @@ python -m PyInstaller --noconfirm --clean packaging/safeinstall.spec
 欢迎贡献 Scanner、Rule、测试、文档、AI 安全检查和 MCP 分析。修改 Loader、Plugin 执行、AI 集成或 GitHub Workflow 之前，请先阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 如果发现 SafeInstall 自身的安全漏洞，请不要公开创建 Issue，按照 [SECURITY.md](SECURITY.md) 的方式私下报告。参与项目即表示同意遵守 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)。
+
+Alpha 用户可以通过 [GitHub Issues](https://github.com/wanhaoli376-lab/SafeInstall/issues/new/choose) 提交经过脱敏的使用反馈。不要上传机密源码、凭据、私有扫描报告或未脱敏的 Secret。
 
 项目使用 [MIT License](LICENSE)。
