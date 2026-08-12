@@ -1,0 +1,87 @@
+- id: SI-SH-001
+  name: Download piped to a shell
+  description: A network download is sent directly to a shell interpreter.
+  severity: high
+  category: download_and_execute
+  language: shell
+  pattern: '\b(?:curl|wget)\b[^|#\n]*\|\s*(?:bash|sh)\b'
+  explanation: This command downloads text from the network and immediately runs it as shell code.
+  recommendation: Download the script first, inspect it, and only then run a trusted local copy.
+  capabilities:
+    - network_access
+    - download_execute
+    - shell_execution
+
+- id: SI-SH-002
+  name: Decoded content piped to a shell
+  description: Base64-decoded content is sent directly to a shell interpreter.
+  severity: critical
+  category: obfuscated_execution
+  language: shell
+  pattern: '\bbase64\b[^|#\n]*(?:-d|--decode)[^|#\n]*\|\s*(?:bash|sh)\b'
+  explanation: Decoding content immediately before execution can hide the command that will run.
+  recommendation: Decode into a file, inspect the result, and do not run it unless the source is trusted.
+  capabilities:
+    - code_execution
+    - shell_execution
+
+- id: SI-SH-003
+  name: Recursive forced deletion
+  description: rm is invoked with recursive and force options.
+  severity: high
+  category: destructive_file_operation
+  language: shell
+  pattern: '\brm\s+(?:-[^\s]*r[^\s]*f|-[^\s]*f[^\s]*r)\b'
+  explanation: This command can remove a directory tree without asking for confirmation.
+  recommendation: Verify the resolved target path and ensure variables cannot be empty or unexpected.
+  capabilities:
+    - file_delete
+
+- id: SI-SH-004
+  name: File ownership or permission change
+  description: The script changes file permissions or ownership.
+  severity: medium
+  category: permission_change
+  language: shell
+  pattern: '\b(?:chmod|chown)\b'
+  explanation: Permission changes affect who can read, write, or execute files.
+  recommendation: Review which paths and permission modes are changed.
+  capabilities:
+    - filesystem_write
+
+- id: SI-SH-005
+  name: Privileged or persistent system change
+  description: The script invokes sudo, systemctl, or crontab.
+  severity: high
+  category: system_change
+  language: shell
+  pattern: '\b(?:sudo|systemctl|crontab)\b'
+  explanation: This command may change system-wide settings, services, scheduled tasks, or privileges.
+  recommendation: Review the exact command and run it only when the system-level change is expected.
+  capabilities:
+    - privilege_escalation
+    - persistence
+
+- id: SI-SH-006
+  name: Network download
+  description: The script uses curl or wget to access the network.
+  severity: low
+  category: network_access
+  language: shell
+  pattern: '\b(?:curl|wget)\b'
+  explanation: This script can download or send data over the network; network access alone is not malicious.
+  recommendation: Review the destination domain and how the response is used.
+  capabilities:
+    - network_access
+
+- id: SI-SH-007
+  name: Remote host access
+  description: The script invokes ssh or scp.
+  severity: medium
+  category: remote_access
+  language: shell
+  pattern: '\b(?:ssh|scp)\b'
+  explanation: This script can connect to another computer or transfer files.
+  recommendation: Review the remote host, authentication method, and transferred paths.
+  capabilities:
+    - network_access

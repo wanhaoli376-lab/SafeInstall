@@ -1,0 +1,41 @@
+name: Rule or scanner request
+description: Propose an evidence-backed static check.
+title: "[Rule request]: "
+labels: [rule-request]
+body:
+  - type: input
+    id: ecosystem
+    attributes:
+      label: Language, format, or ecosystem
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Security-relevant behavior
+      description: Describe the capability and why a user should review it.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Static evidence and public references
+      description: Do not include live malware or real credentials.
+    validations:
+      required: true
+  - type: textarea
+    id: benign
+    attributes:
+      label: Common benign uses and false-positive risks
+    validations:
+      required: true
+  - type: dropdown
+    id: implementation
+    attributes:
+      label: Likely implementation
+      options:
+        - Declarative rule
+        - Structured or AST scanner
+        - Unsure
+    validations:
+      required: true

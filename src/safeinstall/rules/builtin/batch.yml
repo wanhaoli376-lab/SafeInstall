@@ -1,0 +1,61 @@
+- id: SI-BAT-001
+  name: Nested command interpreter
+  description: The script starts cmd.exe to interpret another command string.
+  severity: medium
+  category: command_execution
+  language: batch
+  pattern: '(?i)\bcmd(?:\.exe)?\s+/[ck]\b'
+  explanation: A nested command interpreter can execute additional shell syntax with the current user's permissions.
+  recommendation: Review the complete command string and how its arguments are constructed.
+  capabilities:
+    - shell_execution
+
+- id: SI-BAT-002
+  name: Network download command
+  description: The script uses a Windows download utility or curl.
+  severity: medium
+  category: remote_download
+  language: batch
+  pattern: '(?i)\b(?:curl|certutil|bitsadmin)\b'
+  explanation: This command can retrieve files from a remote location; downloading alone is not malicious.
+  recommendation: Review the source URL and verify the downloaded file before it is used.
+  capabilities:
+    - network_access
+
+- id: SI-BAT-003
+  name: Recursive forced deletion
+  description: The script removes a tree with quiet or forced options.
+  severity: high
+  category: destructive_file_operation
+  language: batch
+  pattern: '(?i)\b(?:rmdir|rd)\s+(?=[^\r\n]*\/s\b)(?=[^\r\n]*\/q\b)|\bdel\s+(?=[^\r\n]*\/s\b)(?=[^\r\n]*\/q\b)'
+  explanation: This command can recursively remove files without confirmation.
+  recommendation: Verify every expanded variable and make sure the final path stays inside the intended directory.
+  capabilities:
+    - file_delete
+
+- id: SI-BAT-004
+  name: Scheduled task or startup persistence
+  description: The script creates a scheduled task or changes a Windows startup registry key.
+  severity: high
+  category: persistence
+  language: batch
+  pattern: '(?i)\bschtasks\b[^\r\n]*\/(?:create|change)\b|\breg\s+add\b[^\r\n]*(?:\\Run|\\RunOnce)\b'
+  explanation: This command may arrange for software to run later or at login.
+  recommendation: Confirm that persistence is expected and review the exact task or registry value.
+  capabilities:
+    - persistence
+    - filesystem_write
+
+- id: SI-BAT-005
+  name: Encoded PowerShell command
+  description: The batch script starts PowerShell with an encoded command.
+  severity: critical
+  category: obfuscated_execution
+  language: batch
+  pattern: '(?i)\bpowershell(?:\.exe)?\b[^\r\n]*-(?:EncodedCommand|enc)\b'
+  explanation: Encoded commands make the operation difficult to inspect before it runs.
+  recommendation: Decode and review the command as data before considering execution.
+  capabilities:
+    - code_execution
+    - shell_execution

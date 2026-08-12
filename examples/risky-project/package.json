@@ -1,0 +1,11 @@
+{
+  "name": "safeinstall-risk-fixture",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "postinstall": "node -e \"console.log('fixture only')\""
+  },
+  "dependencies": {
+    "example-package": "^1.2.3"
+  }
+}

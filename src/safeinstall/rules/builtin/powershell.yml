@@ -1,0 +1,85 @@
+- id: SI-PS-001
+  name: PowerShell expression execution
+  description: Invoke-Expression or its IEX alias executes text as PowerShell code.
+  severity: high
+  category: dynamic_code_execution
+  language: powershell
+  pattern: '(?i)\b(?:Invoke-Expression|IEX)\b'
+  explanation: This command can interpret a string as PowerShell code. Risk increases when the string comes from outside the project.
+  recommendation: Trace the expression source and avoid invoking untrusted text.
+  capabilities:
+    - code_execution
+    - shell_execution
+
+- id: SI-PS-002
+  name: PowerShell network request
+  description: The script can request data over HTTP or HTTPS.
+  severity: low
+  category: network_access
+  language: powershell
+  pattern: '(?i)\b(?:Invoke-WebRequest|iwr)\b'
+  explanation: Network access can download or send data; this capability is not malicious by itself.
+  recommendation: Review the destination and how the response is used.
+  capabilities:
+    - network_access
+
+- id: SI-PS-003
+  name: Process execution
+  description: Start-Process launches another program or command.
+  severity: medium
+  category: command_execution
+  language: powershell
+  pattern: '(?i)\bStart-Process\b'
+  explanation: This script can start another process with the current user's permissions.
+  recommendation: Review the executable, arguments, and working directory.
+  capabilities:
+    - shell_execution
+
+- id: SI-PS-004
+  name: Remote content download
+  description: DownloadString retrieves content from a remote location.
+  severity: medium
+  category: remote_download
+  language: powershell
+  pattern: '(?i)\bDownloadString\s*\('
+  explanation: This script can retrieve text from the network. The risk depends on whether that text is later executed.
+  recommendation: Review the source URL and keep downloaded content separate from execution.
+  capabilities:
+    - network_access
+
+- id: SI-PS-005
+  name: Encoded PowerShell command
+  description: PowerShell is asked to decode a command before running it.
+  severity: critical
+  category: obfuscated_execution
+  language: powershell
+  pattern: '(?i)-(?:EncodedCommand|enc)\b'
+  explanation: Encoded commands make the actual operation harder to inspect before execution.
+  recommendation: Decode and review the command as data; do not run it until its source is trusted.
+  capabilities:
+    - code_execution
+    - shell_execution
+
+- id: SI-PS-006
+  name: Hidden process window
+  description: A process is configured to run with a hidden window.
+  severity: medium
+  category: hidden_execution
+  language: powershell
+  pattern: '(?i)-WindowStyle\s+Hidden\b'
+  explanation: Hiding a process can be legitimate for background automation, but it reduces user visibility.
+  recommendation: Confirm that background execution is expected and review the launched command.
+  capabilities:
+    - shell_execution
+
+- id: SI-PS-007
+  name: PowerShell execution policy bypass
+  description: The process requests a permissive PowerShell execution policy.
+  severity: high
+  category: security_bypass
+  language: powershell
+  pattern: '(?i)-ExecutionPolicy\s+(?:Bypass|Unrestricted)\b'
+  explanation: This option bypasses or weakens a local policy intended to control script execution.
+  recommendation: Do not bypass execution policy unless you have reviewed and trust the script.
+  capabilities:
+    - shell_execution

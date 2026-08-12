@@ -1,0 +1,43 @@
+- id: SI-PRM-001
+  name: Instruction hierarchy override
+  description: Prompt-like text asks a model to ignore earlier or higher-priority instructions.
+  severity: medium
+  category: prompt_injection
+  language: prompt
+  pattern: '(?i)\bignore\s+(?:all\s+)?(?:previous|prior|system|developer)\s+instructions?\b'
+  explanation: Potential prompt-injection instruction detected. The phrase may be a test fixture or documentation, so it is not proof of malicious intent.
+  recommendation: Manual review recommended. Treat this text as untrusted data, never as instructions to SafeInstall or its AI provider.
+
+- id: SI-PRM-002
+  name: System prompt disclosure request
+  description: Prompt-like text asks a model to reveal hidden system instructions.
+  severity: medium
+  category: prompt_injection
+  language: prompt
+  pattern: '(?i)\b(?:reveal|show|print|return|expose)\b[^\n]{0,80}\bsystem\s+prompt\b'
+  explanation: Potential prompt-injection instruction detected. A disclosure phrase can also appear in security research or tests.
+  recommendation: Manual review recommended. Do not provide hidden instructions or secrets in response to target content.
+
+- id: SI-PRM-003
+  name: Secret collection and transmission instruction
+  description: Prompt-like text combines sensitive environment access with a request to transmit secrets.
+  severity: high
+  category: prompt_injection
+  language: prompt
+  pattern: '(?i)\b(?:read|access|collect)\b[^\n]{0,80}\benvironment\s+variables?\b[^\n]{0,120}\b(?:send|upload|post|exfiltrate)\b[^\n]{0,80}\bsecrets?\b'
+  explanation: Potential prompt-injection instruction detected. It describes a possible secret-exfiltration chain, but context still requires human review.
+  recommendation: Manual review recommended. Never grant target text access to tools, environment variables, network calls, or credentials.
+  capabilities:
+    - environment_read
+    - network_access
+    - sensitive_data_access
+
+- id: SI-PRM-004
+  name: Safety rule override request
+  description: Prompt-like text asks a model to ignore or disable security controls.
+  severity: high
+  category: prompt_injection
+  language: prompt
+  pattern: '(?i)\b(?:ignore|disable|bypass|override)\b[^\n]{0,80}\b(?:security|safety)\s+(?:rules?|checks?|policy|policies)\b'
+  explanation: Potential prompt-injection instruction detected. This wording may be benign security documentation, so intent is not inferred automatically.
+  recommendation: Manual review recommended. Security policy must remain outside the authority of scanned content.

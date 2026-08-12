@@ -1,0 +1,64 @@
+name: Bug report
+description: Report reproducible incorrect behavior in SafeInstall.
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include real secrets, live malware, or undisclosed vulnerabilities. Follow SECURITY.md for security reports.
+  - type: input
+    id: version
+    attributes:
+      label: SafeInstall version or commit
+      placeholder: 0.1.0a0 or commit SHA
+    validations:
+      required: true
+  - type: dropdown
+    id: target
+    attributes:
+      label: Target type
+      options:
+        - Local file or folder
+        - ZIP or TAR archive
+        - Public GitHub repository
+        - Rule or plugin API
+        - Optional AI analysis
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal safe reproduction
+      description: Use inert strings or a public benign fixture. Include the exact command.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      placeholder: OS, Python version, installation method
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety check
+      options:
+        - label: I removed real credentials, personal data, and harmful payloads.
+          required: true
+        - label: This is not an undisclosed vulnerability in SafeInstall itself.
+          required: true
