@@ -74,6 +74,12 @@ class FileDiscoverer:
     def __init__(self, *, limits: DiscoveryLimits | None = None) -> None:
         self._limits = limits or DiscoveryLimits()
 
+    @staticmethod
+    def supports_file(path: Path) -> bool:
+        """Return whether a single local file has a supported text format."""
+
+        return _detect_language(path, path.parent) is not None
+
     def discover(self, target: LoadedTarget) -> tuple[SourceFile, ...]:
         root = target.root.resolve(strict=True)
         candidates = (

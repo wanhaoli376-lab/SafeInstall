@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "safeinstall"
-version = "0.1.0a0"
+version = "0.2.0a0"
 description = "Understand software before you run it."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -12,10 +12,11 @@ license = { text = "MIT" }
 authors = [
   { name = "SafeInstall contributors" },
 ]
-keywords = ["security", "static-analysis", "supply-chain", "mcp", "cli"]
+keywords = ["security", "static-analysis", "supply-chain", "mcp", "cli", "desktop"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Environment :: Console",
+  "Environment :: X11 Applications :: Qt",
   "License :: OSI Approved :: MIT License",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.11",
@@ -33,6 +34,9 @@ dependencies = [
 
 [project.optional-dependencies]
 ai = ["openai>=1.66,<3"]
+gui = ["PySide6>=6.8,<6.11"]
+gui-test = ["pytest-qt>=4.4,<5"]
+packaging = ["PyInstaller>=6.18,<7"]
 dev = [
   "pytest>=8.3,<10",
   "pytest-cov>=6,<8",
@@ -41,6 +45,7 @@ dev = [
 
 [project.scripts]
 safeinstall = "safeinstall.cli:app"
+safeinstall-gui = "safeinstall.gui.launcher:main"
 
 [project.urls]
 Documentation = "https://github.com/wanhaoli376-lab/SafeInstall#readme"

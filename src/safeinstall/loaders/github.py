@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
+import shutil
 import subprocess
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -11,9 +13,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Protocol
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 
+import httpx
+
+from safeinstall import __version__
 from safeinstall.exceptions import RepositoryLoadError
+from safeinstall.loaders.archive import ArchiveLoader
 from safeinstall.loaders.base import LoadedTarget
 from safeinstall.models import TargetKind
 from safeinstall.redaction import redact_text
@@ -37,6 +43,18 @@ class GitRunner(Protocol):
         timeout: float,
     ) -> GitRunResult:
         """Run a Git argument vector without a shell."""
+
+
+class GitHubArchiveFetcher(Protocol):
+    def fetch(
+        self,
+        owner: str,
+        repository: str,
+        destination: Path,
+        *,
+        limits: GitHubLimits,
+    ) -> dict[str, str]:
+        """Download one public repository snapshot without executing target content."""
 
 
 class SubprocessGitRunner:
@@ -74,6 +92,77 @@ class GitHubLimits:
     clone_timeout_seconds: float = 60.0
     max_checkout_bytes: int = 500_000_000
     max_checkout_files: int = 100_000
+    max_archive_bytes: int = 100_000_000
+    max_metadata_bytes: int = 1_000_000
+
+
+class HttpxGitHubArchiveFetcher:
+    """Fetch a commit-pinned public snapshot from fixed GitHub HTTPS hosts."""
+
+    def __init__(self, *, transport: httpx.BaseTransport | None = None) -> None:
+        self._transport = transport
+
+    def fetch(
+        self,
+        owner: str,
+        repository: str,
+        destination: Path,
+        *,
+        limits: GitHubLimits,
+    ) -> dict[str, str]:
+        headers = {
+            "Accept": "application/vnd.github+json",
+            "User-Agent": f"SafeInstall/{__version__}",
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
+        timeout = httpx.Timeout(limits.clone_timeout_seconds)
+        try:
+            with httpx.Client(
+                follow_redirects=False,
+                timeout=timeout,
+                transport=self._transport,
+            ) as client:
+                repository_data = _get_json(
+                    client,
+                    f"https://api.github.com/repos/{owner}/{repository}",
+                    headers=headers,
+                    max_bytes=limits.max_metadata_bytes,
+                )
+                branch = repository_data.get("default_branch")
+                if not _safe_api_name(branch):
+                    raise RepositoryLoadError("GitHub returned invalid default-branch metadata.")
+                commit_data = _get_json(
+                    client,
+                    (
+                        f"https://api.github.com/repos/{owner}/{repository}/commits/"
+                        f"{quote(branch, safe='')}"
+                    ),
+                    headers=headers,
+                    max_bytes=limits.max_metadata_bytes,
+                )
+                commit = commit_data.get("sha")
+                if not isinstance(commit, str) or re.fullmatch(r"[0-9a-fA-F]{40}", commit) is None:
+                    raise RepositoryLoadError("GitHub returned invalid commit metadata.")
+                commit = commit.casefold()
+                archive_headers = {
+                    "Accept": "application/zip",
+                    "User-Agent": f"SafeInstall/{__version__}",
+                }
+                _download_bounded(
+                    client,
+                    f"https://codeload.github.com/{owner}/{repository}/zip/{commit}",
+                    destination,
+                    headers=archive_headers,
+                    max_bytes=limits.max_archive_bytes,
+                )
+        except RepositoryLoadError:
+            raise
+        except (httpx.HTTPError, OSError, ValueError, json.JSONDecodeError) as exc:
+            destination.unlink(missing_ok=True)
+            raise RepositoryLoadError(
+                "Could not download the public GitHub repository snapshot."
+            ) from exc
+        return {"default_branch": branch, "commit": commit}
 
 
 class GitHubLoader:
@@ -83,10 +172,18 @@ class GitHubLoader:
         self,
         *,
         runner: GitRunner | None = None,
+        archive_fetcher: GitHubArchiveFetcher | None = None,
+        git_available: bool | None = None,
         limits: GitHubLimits | None = None,
         temp_parent: Path | None = None,
     ) -> None:
         self._runner = runner or SubprocessGitRunner()
+        self._archive_fetcher = archive_fetcher or HttpxGitHubArchiveFetcher()
+        self._git_available = (
+            runner is not None or shutil.which("git") is not None
+            if git_available is None
+            else git_available
+        )
         self._limits = limits or GitHubLimits()
         self._temp_parent = temp_parent
 
@@ -100,6 +197,16 @@ class GitHubLoader:
     @contextmanager
     def open(self, target: str | Path) -> Iterator[LoadedTarget]:
         owner, repository = _parse_github_url(str(target))
+        if not self._git_available:
+            with self._open_archive(owner, repository) as loaded:
+                yield loaded
+            return
+
+        with self._open_git(owner, repository) as loaded:
+            yield loaded
+
+    @contextmanager
+    def _open_git(self, owner: str, repository: str) -> Iterator[LoadedTarget]:
         canonical_url = f"https://github.com/{owner}/{repository}.git"
         temp_parent = str(self._temp_parent) if self._temp_parent is not None else None
         with TemporaryDirectory(prefix="safeinstall-github-", dir=temp_parent) as temp_name:
@@ -151,6 +258,35 @@ class GitHubLoader:
                     "commit": commit,
                 },
             )
+
+    @contextmanager
+    def _open_archive(self, owner: str, repository: str) -> Iterator[LoadedTarget]:
+        canonical_url = f"https://github.com/{owner}/{repository}.git"
+        temp_parent = str(self._temp_parent) if self._temp_parent is not None else None
+        with TemporaryDirectory(prefix="safeinstall-github-", dir=temp_parent) as temp_name:
+            workspace = Path(temp_name)
+            archive = workspace / "repository.zip"
+            metadata = self._archive_fetcher.fetch(
+                owner,
+                repository,
+                archive,
+                limits=self._limits,
+            )
+            archive_loader = ArchiveLoader(temp_parent=workspace)
+            with archive_loader.open(archive) as extracted:
+                checkout = _snapshot_root(extracted.root)
+                self._validate_checkout(checkout)
+                yield LoadedTarget(
+                    root=checkout,
+                    source=canonical_url,
+                    kind=TargetKind.GITHUB,
+                    metadata={
+                        "repository": f"{owner}/{repository}",
+                        "default_branch": redact_text(metadata["default_branch"])[:200],
+                        "commit": redact_text(metadata["commit"])[:200],
+                        "transport": "https_snapshot",
+                    },
+                )
 
     def _git_value(
         self, checkout: Path, command: tuple[str, ...], environment: dict[str, str]
@@ -241,3 +377,87 @@ def _git_environment() -> dict[str, str]:
         }
     )
     return environment
+
+
+def _get_json(
+    client: httpx.Client,
+    url: str,
+    *,
+    headers: dict[str, str],
+    max_bytes: int,
+) -> dict[str, object]:
+    with client.stream("GET", url, headers=headers) as response:
+        _require_success(response)
+        _validate_content_length(response, max_bytes)
+        content = bytearray()
+        for chunk in response.iter_bytes():
+            content.extend(chunk)
+            if len(content) > max_bytes:
+                raise RepositoryLoadError("GitHub metadata exceeded the size limit.")
+    parsed = json.loads(content)
+    if not isinstance(parsed, dict):
+        raise RepositoryLoadError("GitHub returned invalid repository metadata.")
+    return parsed
+
+
+def _download_bounded(
+    client: httpx.Client,
+    url: str,
+    destination: Path,
+    *,
+    headers: dict[str, str],
+    max_bytes: int,
+) -> None:
+    try:
+        with client.stream("GET", url, headers=headers) as response:
+            _require_success(response)
+            _validate_content_length(response, max_bytes)
+            copied = 0
+            with destination.open("xb") as output:
+                for chunk in response.iter_bytes():
+                    copied += len(chunk)
+                    if copied > max_bytes:
+                        raise RepositoryLoadError(
+                            "GitHub repository snapshot exceeded the download limit."
+                        )
+                    output.write(chunk)
+    except Exception:
+        destination.unlink(missing_ok=True)
+        raise
+
+
+def _require_success(response: httpx.Response) -> None:
+    if response.status_code == 200:
+        return
+    if response.status_code == 404:
+        raise RepositoryLoadError("GitHub repository does not exist or is not public.")
+    if response.status_code in {403, 429}:
+        raise RepositoryLoadError("GitHub API is unavailable or rate-limited.")
+    raise RepositoryLoadError("GitHub returned an unsuccessful response.")
+
+
+def _validate_content_length(response: httpx.Response, max_bytes: int) -> None:
+    value = response.headers.get("content-length")
+    if value is None:
+        return
+    try:
+        length = int(value)
+    except ValueError as exc:
+        raise RepositoryLoadError("GitHub returned an invalid content length.") from exc
+    if length < 0 or length > max_bytes:
+        raise RepositoryLoadError("GitHub response exceeded the download size limit.")
+
+
+def _safe_api_name(value: object) -> bool:
+    return (
+        isinstance(value, str)
+        and 1 <= len(value) <= 255
+        and not any(ord(character) < 32 or ord(character) == 127 for character in value)
+    )
+
+
+def _snapshot_root(root: Path) -> Path:
+    entries = list(root.iterdir())
+    if len(entries) == 1 and entries[0].is_dir() and not entries[0].is_symlink():
+        return entries[0]
+    return root

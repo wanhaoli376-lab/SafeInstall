@@ -9,8 +9,9 @@ servers before you run them. It turns security-relevant code patterns into a rep
 explains what a target may be able to do, where the evidence is, and what to review next.
 
 SafeInstall is local-first and static by default. It never installs dependencies, imports a
-target package, or executes scanned code. Optional OpenAI analysis is off unless you pass
-`--ai`.
+target package, or executes scanned code. Core local scanning works without an OpenAI API key,
+an account, or a network connection. Optional OpenAI analysis is off unless you pass `--ai` in
+the CLI or explicitly enable it in desktop settings.
 
 > [!IMPORTANT]
 > SafeInstall provides risk analysis, not a malware-free guarantee. It does not replace
@@ -32,6 +33,7 @@ SafeInstall separates three things that security reports often blur together:
 ## Features
 
 - Local files and folders, ZIP/TAR archives, and public GitHub repositories
+- Experimental English/Simplified Chinese desktop interface with drag-and-drop and background scans
 - Python, shell, PowerShell, batch, and JavaScript/Node.js static scanners
 - Dependency, install-script, Dockerfile, and GitHub Actions supply-chain checks
 - Secret detection with centralized redaction; reports never intentionally print full values
@@ -41,6 +43,28 @@ SafeInstall separates three things that security reports often blur together:
 - Human-readable terminal output plus stable JSON and GitHub-ready Markdown
 - Strict YAML rule loading and an explicit scanner plugin registry
 - Bounded, opt-in OpenAI explanations that receive only redacted findings and prompt excerpts
+
+## Desktop App
+
+SafeInstall now includes an **experimental desktop interface** for selecting or dragging in a
+file, supported archive, or folder, and for pasting a public GitHub repository URL.
+
+```text
+File / Folder / Archive / GitHub URL
+                  ↓
+             SafeInstall
+                  ↓
+       Risk overview + evidence
+```
+
+Local targets are analyzed on your computer. No account, telemetry, OpenAI account, or OpenAI API
+key is required. AI explanations are off by default. The window remains responsive because it
+calls the same `scan_target()` core as the CLI in a worker thread; it does not implement or weaken
+the scanners itself.
+
+The portable build recipe is implemented and validated on Windows, but this README does not claim
+that a downloadable release exists until an asset is actually published on GitHub Releases. See
+[Desktop and packaging](docs/desktop.md) for current build and platform status.
 
 ## Installation
 
@@ -56,6 +80,13 @@ For development:
 
 ```console
 python -m pip install -e ".[dev]"
+```
+
+To run the experimental desktop interface from source:
+
+```console
+python -m pip install -e ".[gui]"
+safeinstall-gui
 ```
 
 Optional AI support is a separate extra:
@@ -75,9 +106,14 @@ safeinstall scan ./unknown-project --format json
 safeinstall scan ./unknown-project --format markdown
 ```
 
-Nothing in the target is run by these commands. Public GitHub repositories are shallow-cloned
-to a restricted temporary directory with hooks and Git LFS smudging disabled, scanned, then
-removed.
+Nothing in the target is run by these commands. When Git is available, public repositories are
+shallow-cloned with hooks and Git LFS smudging disabled. Otherwise SafeInstall downloads a
+commit-pinned ZIP snapshot from fixed GitHub API/codeload hosts and passes it through the same safe
+archive extractor. Either transport uses a restricted temporary directory that is removed after
+the scan.
+
+Local GUI scans work fully offline. GitHub URL scans require network access, but not Git, a GitHub
+account, or an API token for public repositories. Anonymous GitHub API rate limits still apply.
 
 ### Example report
 
@@ -119,12 +155,16 @@ rather than a destructive command or working payload.
 | Supported | Python, shell, PowerShell, batch, JavaScript/Node.js |
 | Supported | Python/npm manifests, lockfiles, install scripts, Dockerfiles, GitHub Actions |
 | Supported | Skills, plugin manifests, MCP configurations/servers, prompt-like Markdown |
-| Experimental | External YAML rules, trusted in-process scanner plugins, optional AI summaries |
+| Experimental | Desktop GUI, Windows portable packaging, external YAML rules, trusted in-process scanner plugins, optional AI summaries |
 | Planned | Deep binary formats (`.exe`, `.msi`, `.dmg`, `.pkg`), Go, Rust, APK, Office macros |
-| Planned | Isolated execution sandbox and graphical interface; neither exists in v0.1 |
+| Planned | Isolated execution sandbox, signed/notarized installers, automatic update checks, and binary analysis |
 
 Unsupported or unrecognized content may be skipped. A clean report means that no supported
 pattern was found; it does not prove safety.
+
+The desktop app rejects known unsupported installer/binary formats instead of claiming they were
+analyzed. A future `BinaryScanner` boundary is documented, but no empty or misleading binary
+scanner is shipped.
 
 ## Optional AI Analysis
 
@@ -137,6 +177,10 @@ sample configuration or report. SafeInstall scans locally first, selects a bound
 findings and prompt files, redacts recognized secrets, and then sends those excerpts to the
 OpenAI API. Target content is placed in the user-data portion of a fixed prompt and is always
 treated as untrusted data.
+
+**SafeInstall does not need an OpenAI API key for its core scanning features.** Installing only
+the GUI extra also does not install the OpenAI SDK. If either the key or optional SDK is missing,
+the desktop app explains that AI is unavailable and continues to scan locally.
 
 Do not use `--ai` if code is not permitted to leave your environment. AI output is explanatory
 and cannot lower the locally calculated risk or act as a security boundary. See
@@ -162,18 +206,27 @@ python -m ruff format --check .
 python -m pytest
 ```
 
+Desktop development and portable packaging:
+
+```console
+python -m pip install -e ".[dev,gui,gui-test,packaging]"
+python -m pytest tests/gui
+python -m PyInstaller --noconfirm --clean packaging/safeinstall.spec
+```
+
 The security suite covers archive traversal, symlink escape, secret redaction, malicious
 filenames, Git URL injection, and AI prompt isolation.
 
 ## Roadmap
 
 - **v0.1 alpha:** CLI, safe loaders, core language scanners, secrets, reports, and examples
-- **v0.2:** deeper Node.js/PowerShell context, lockfile coverage, and GitHub Actions analysis
+- **v0.2 alpha:** experimental desktop GUI, drag-and-drop, local worker scans, bilingual results,
+  report export, and portable build artifacts
 - **v0.3:** richer Skill/plugin/MCP semantics and opt-in AI behavior-chain review
-- **v0.4:** documented plugin SDK and broader community rule packs
+- **v0.4:** documented plugin SDK, broader community rule packs, and packaging hardening
 - **v1.0:** stable rule/plugin APIs and supported CI integration
 
-The v0.1 codebase already includes early implementations of several later items; those APIs
+The v0.2 alpha codebase already includes early implementations of several later items; those APIs
 remain experimental until their milestone is complete.
 
 ## Contributing and Security

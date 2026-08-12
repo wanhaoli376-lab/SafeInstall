@@ -6,7 +6,7 @@
 
 SafeInstall 用于在运行陌生脚本、开源项目、AI 插件、Skill 或 MCP Server 之前，先做一遍静态安全分析。它会找出值得关注的代码模式，说明目标可能具备哪些能力，给出文件和行号证据，并告诉你下一步应该检查什么。
 
-SafeInstall 默认在本地做静态分析：不安装目标依赖，不导入目标 Python 包，也不执行被扫描的代码。只有显式传入 `--ai` 时，才会启用可选的 OpenAI 分析。
+SafeInstall 默认在本地做静态分析：不安装目标依赖，不导入目标 Python 包，也不执行被扫描的代码。核心本地扫描不需要 OpenAI API Key、账号或网络连接。只有在 CLI 显式传入 `--ai`，或在桌面设置中主动开启时，才会启用可选 OpenAI 分析。
 
 > [!IMPORTANT]
 > SafeInstall 提供的是风险分析，不是“无恶意软件”证明。它不能替代杀毒软件、沙箱、人工代码审查，也不能替代对软件来源的判断。
@@ -24,6 +24,7 @@ SafeInstall 会把安全报告中经常混在一起的三类信息拆开：
 ## 功能
 
 - 扫描本地文件或目录、ZIP/TAR 压缩包、公开 GitHub 仓库
+- 提供支持 English/简体中文、拖拽与后台扫描的实验性桌面界面
 - 静态分析 Python、Shell、PowerShell、Batch、JavaScript/Node.js
 - 检查依赖、安装脚本、Dockerfile 和 GitHub Actions 供应链风险
 - 检测 Secret，并通过统一脱敏层防止报告完整打印凭据
@@ -33,6 +34,22 @@ SafeInstall 会把安全报告中经常混在一起的三类信息拆开：
 - 输出适合普通用户的终端报告，以及稳定的 JSON 和 GitHub Markdown
 - 提供严格的 YAML Rule Engine 和显式注册的 Scanner Plugin 框架
 - 提供有边界、需主动开启的 OpenAI 风险解释
+
+## 桌面应用
+
+SafeInstall 现在包含一个**实验性桌面界面**。用户可以选择或拖入文件、受支持的压缩包、文件夹，也可以粘贴公开 GitHub 仓库地址。
+
+```text
+文件 / 文件夹 / 压缩包 / GitHub URL
+                    ↓
+               SafeInstall
+                    ↓
+             风险概览 + 证据
+```
+
+本地目标只在你的电脑上分析，不需要账号、Telemetry、OpenAI 账号或 OpenAI API Key。AI 解释默认关闭。桌面界面通过 Worker Thread 调用与 CLI 相同的 `scan_target()`，不会另写扫描器，也不会削弱静态分析边界。
+
+Windows portable 构建流程已经实现并在本机验证，但只有 GitHub Releases 真正出现附件后，本文才会提供下载入口。当前构建方式与平台状态见[桌面与打包文档](docs/desktop.md)。
 
 ## 安装
 
@@ -48,6 +65,13 @@ python -m pip install -e .
 
 ```console
 python -m pip install -e ".[dev]"
+```
+
+从源码运行实验性桌面界面：
+
+```console
+python -m pip install -e ".[gui]"
+safeinstall-gui
 ```
 
 可选 AI 功能使用独立依赖组：
@@ -67,7 +91,9 @@ safeinstall scan ./unknown-project --format json
 safeinstall scan ./unknown-project --format markdown
 ```
 
-这些命令都不会运行目标代码。扫描公开 GitHub 仓库时，SafeInstall 会把仓库浅克隆到临时目录，禁用 Git Hook 和 Git LFS Smudge，在限制范围内完成扫描后清理临时内容。
+这些命令都不会运行目标代码。有 Git 时，SafeInstall 会浅克隆公开仓库，并禁用 Git Hook 和 Git LFS Smudge；没有 Git 时，它会从固定的 GitHub API/codeload 主机下载固定到 Commit 的 ZIP 快照，再交给同一套安全压缩包加载器。两种方式都只在受限临时目录中工作，扫描后清理。
+
+GUI 的本地扫描可完全离线使用。扫描 GitHub URL 需要网络，但公开仓库不要求 Git、GitHub 账号或 API Token；仍受 GitHub 匿名 API 频率限制。
 
 ### 报告示例
 
@@ -108,11 +134,13 @@ safeinstall scan ./examples/risky-project
 | 已支持 | Python、Shell、PowerShell、Batch、JavaScript/Node.js |
 | 已支持 | Python/npm Manifest、Lockfile、安装脚本、Dockerfile、GitHub Actions |
 | 已支持 | Skill、Plugin Manifest、MCP 配置/Server、Prompt 类 Markdown |
-| 实验性 | 外部 YAML 规则、可信的进程内 Scanner Plugin、可选 AI 摘要 |
+| 实验性 | 桌面 GUI、Windows portable 打包、外部 YAML 规则、可信的进程内 Scanner Plugin、可选 AI 摘要 |
 | 计划中 | `.exe`、`.msi`、`.dmg`、`.pkg` 深度分析，以及 Go、Rust、APK、Office Macro |
-| 计划中 | 隔离执行沙箱和图形界面；v0.1 不会运行目标代码，也不提供 GUI |
+| 计划中 | 隔离执行沙箱、签名与 notarize 后的安装包、更新检查和二进制分析 |
 
 不支持或无法识别的内容可能会被跳过。报告没有发现风险，只代表在当前支持范围和资源限制内没有命中规则，并不能证明目标安全。
+
+桌面应用会直接拒绝已知不支持的安装包与二进制格式，不会误导用户说“已经分析 EXE”。架构为未来的 `BinaryScanner` 预留边界，但当前不会放置空实现。
 
 ## 可选 AI 分析
 
@@ -121,6 +149,8 @@ safeinstall scan ./project --ai
 ```
 
 AI 模式只从进程环境读取 `OPENAI_API_KEY`，不会把 Key 写入示例配置、日志或报告。SafeInstall 会先完成本地扫描，再选取有限数量的 Finding 和 Prompt 文件片段，经过脱敏后发送给 OpenAI API。目标内容位于固定 Prompt 的用户数据部分，并始终被当作不可信数据，而不是系统指令。
+
+**SafeInstall 的核心本地安全扫描功能不需要 OpenAI API Key。** 只安装 GUI 依赖时也不会安装 OpenAI SDK。缺少 Key 或 SDK 时，桌面应用只会说明 AI 暂不可用，仍会继续完成本地扫描。
 
 如果代码不允许离开当前环境，请不要使用 `--ai`。AI 输出只用于解释，不能降低本地计算出的风险等级，也不是任何安全边界。更多信息见 [OpenAI API 维护说明](docs/openai-api-maintenance.md)和[安全模型](docs/security-model.md)。
 
@@ -138,17 +168,25 @@ python -m ruff format --check .
 python -m pytest
 ```
 
+桌面开发与 portable 打包：
+
+```console
+python -m pip install -e ".[dev,gui,gui-test,packaging]"
+python -m pytest tests/gui
+python -m PyInstaller --noconfirm --clean packaging/safeinstall.spec
+```
+
 安全测试覆盖 Archive Traversal、Zip Slip、Symlink Escape、Secret 脱敏、恶意文件名、Git URL 注入和 AI Prompt 隔离。
 
 ## 路线图
 
 - **v0.1 alpha：** CLI、安全加载器、核心语言扫描、Secret、报告和示例
-- **v0.2：** 更深入的 Node.js/PowerShell 上下文、Lockfile 和 GitHub Actions 分析
+- **v0.2 alpha：** 实验性桌面 GUI、拖拽、本地 Worker 扫描、双语结果、报告导出和 portable artifacts
 - **v0.3：** 更完整的 Skill/Plugin/MCP 语义，以及可选 AI 行为链复核
-- **v0.4：** 文档化 Plugin SDK 和更丰富的社区规则包
+- **v0.4：** 文档化 Plugin SDK、更丰富的社区规则包与打包加固
 - **v1.0：** 稳定的 Rule/Plugin API 与正式 CI 集成
 
-当前 v0.1 代码已经提前实现了部分后续能力，但在对应里程碑完成之前，这些 API 仍视为实验性功能。
+当前 v0.2 alpha 代码已经提前实现了部分后续能力，但在对应里程碑完成之前，这些 API 仍视为实验性功能。
 
 ## 贡献与安全报告
 

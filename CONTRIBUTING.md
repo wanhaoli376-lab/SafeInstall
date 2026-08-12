@@ -22,6 +22,13 @@ python -m ruff format --check .
 python -m pytest
 ```
 
+For desktop changes, install the optional GUI test stack and keep Qt offscreen in automation:
+
+```console
+python -m pip install -e ".[dev,gui,gui-test]"
+python -m pytest tests/gui
+```
+
 Add focused tests before or with an implementation. Every finding should include a stable rule
 ID, severity, category, explanation, recommendation, and exact file/line evidence. Describe a
 capability or potential risk; do not label a target malicious without proof.
@@ -40,10 +47,11 @@ See [`docs/rule-development.md`](docs/rule-development.md) and
 
 ## Security-sensitive review
 
-Changes under `loaders/`, `plugins/`, `analysis/ai_analysis.py`, archive parsing, redaction, or
-`.github/workflows/` require explicit security review. Reviewers should check path containment,
-links/reparse points, subprocess argument boundaries, time/size limits, secret handling, prompt
-isolation, and behavior on an untrusted pull request.
+Changes under `loaders/`, `plugins/`, `analysis/ai_analysis.py`, `gui/workers.py`, GUI export or
+packaging code, archive parsing, redaction, or `.github/workflows/` require explicit security
+review. Reviewers should check path containment, links/reparse points, subprocess argument
+boundaries, thread lifecycle, export overwrite/symlink behavior, time/size limits, secret
+handling, prompt isolation, and behavior on an untrusted pull request.
 
 Workflow tests for outside contributions must not receive `OPENAI_API_KEY`, elevated
 `GITHUB_TOKEN` permissions, deployment credentials, or other repository secrets.

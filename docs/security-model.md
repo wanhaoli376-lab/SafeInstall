@@ -11,7 +11,7 @@ valid source code does not make any of its bytes trustworthy.
 - Bound file count, file size, archive expansion, parser input, Git transfer, and AI context.
 - Redact secrets when a finding is created and again at every output/API boundary.
 - Preserve evidence and distinguish observed facts from inference and advice.
-- Make all network-backed AI analysis explicit and optional.
+- Make all network-backed AI analysis explicit and optional in both CLI and desktop interfaces.
 
 ## Trust boundaries
 
@@ -25,6 +25,8 @@ valid source code does not make any of its bytes trustworthy.
 | Declarative rule file | Untrusted configuration | `safe_load`, strict schema, regex size/compile validation, duplicate rejection |
 | Python scanner plugin | Trusted executable code | explicit registration only; no discovery from targets |
 | AI response | Untrusted advisory output | strict JSON validation, redaction, cannot alter local findings or risk |
+| Desktop path/URL input | Untrusted selection | local classification only, one target at a time, explicit start action, existing loaders remain authoritative |
+| Report export path | User-selected output | no symlink output, exclusive create by default, explicit overwrite confirmation, atomic replacement |
 
 ## Archive controls
 
@@ -39,10 +41,18 @@ reparse behavior remain residual risks; dependencies and test coverage must be k
 
 ## Repository controls
 
-Only `https://github.com/OWNER/REPOSITORY` public URLs are accepted in v0.1. Clone is shallow,
-blob-filtered, non-interactive, and passed as a subprocess argument list with `shell=False`.
-Global/system Git configuration, credential prompts, hooks, optional locks, and Git LFS smudging
-are disabled for the operation. SafeInstall does not run checkout scripts or repository code.
+Only `https://github.com/OWNER/REPOSITORY` public URLs are accepted in v0.2 alpha. When Git is
+available, clone is shallow, blob-filtered, non-interactive, and passed as a subprocess argument
+list with `shell=False`. Global/system Git configuration, credential prompts, hooks, optional
+locks, and Git LFS smudging are disabled.
+
+When Git is unavailable, SafeInstall obtains the public default branch and 40-character commit
+SHA from `api.github.com`, then streams a commit-pinned ZIP from `codeload.github.com`. Redirects
+are disabled, response metadata and compressed bytes are bounded, no token or ambient GitHub
+credential is sent, and the result passes through the existing traversal/link-safe archive
+loader. Both transports use temporary directories and do not run checkout scripts or repository
+code. Anonymous API rate limiting and compromise of GitHub/TLS remain residual availability and
+supply-chain risks.
 
 ## Secret handling
 
@@ -61,9 +71,32 @@ made available to the model, API storage is disabled by the client request, and 
 schema-validated and redacted. The AI result is explanatory; it cannot suppress local evidence,
 change the deterministic score, execute a tool, or read the process environment.
 
+## Desktop and packaging controls
+
+The GUI never implements a second scan path. It invokes `scan_target()` on a `QThread`, and only
+Qt presentation code runs on the main thread. Drag-and-drop does not start a scan automatically.
+Navigation cannot interrupt and forcibly terminate an active parser thread. Errors are mapped to
+plain-language pages; bounded, redacted technical text is available separately without a Python
+traceback.
+
+AI is off on first launch. The GUI does not check a key at startup, store a key, or import the
+optional OpenAI SDK for a normal scan. Enabling AI checks `OPENAI_API_KEY` and SDK availability;
+failure leaves all local features available. No telemetry, crash upload, persistent scan history,
+or automatic executable updater is included.
+
+Exports reuse the core renderers so final recursive redaction still applies. A new destination is
+created exclusively with restricted permissions. Existing files require confirmation and are
+replaced through a temporary file in the same directory; symlink destinations are rejected.
+
+Portable packages are platform-specific one-folder builds. Built-in YAML rule data is collected,
+while the optional OpenAI SDK is excluded. The artifact workflow uses pinned actions and read-only
+repository permission, is not triggered by pull requests, receives no product/API secrets, and
+does not publish a GitHub Release. Windows packaged startup is locally smoke-tested; macOS signing
+and notarization remain unresolved distribution work.
+
 ## Non-goals and residual risk
 
-SafeInstall v0.1 does not perform dynamic sandboxing, decompilation, full control/data-flow
+SafeInstall v0.2 alpha does not perform dynamic sandboxing, decompilation, full control/data-flow
 analysis, package reputation lookup, signature validation, or a malware-free certification.
 Static analysis has both false positives and false negatives. A clean report means only that no
 supported pattern was observed within configured limits.

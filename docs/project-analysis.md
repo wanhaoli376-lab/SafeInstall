@@ -10,10 +10,9 @@ safety.
 
 ## 2. GitHub stars, forks, and contributors
 
-**Available after public repository launch.** This project analysis does not invent repository
-statistics. Once published, a future integration may retrieve public stars, forks, contributor
-counts, default branch, and commit metadata from the GitHub API. Values unavailable without an
-API call should be omitted rather than guessed.
+The repository is public, but stars, forks, and contributor counts are deliberately not copied
+into this source document because they become stale. Current values are available from the GitHub
+repository/API. Values not retrieved at runtime must be omitted rather than guessed.
 
 ## 3. Core functions and modules
 
@@ -26,6 +25,8 @@ API call should be omitted rather than guessed.
 - **AI Component Scanner:** recognizes Skills, plugin manifests, prompts, and MCP components.
 - **Risk Engine:** weighs severity, distinct capability/context, and explicit behavior chains.
 - **Report Generator:** renders the same evidence as terminal, JSON, or Markdown.
+- **Desktop Presentation:** runs the public scan API on a worker thread and layers a bilingual
+  overview, capability summary, technical evidence, errors, settings, and report export.
 - **Plugin System:** registers trusted scanner objects through an explicit registry.
 
 ## 4. Users
@@ -44,16 +45,17 @@ positive fixtures. Stable IDs and evidence requirements make these contributions
 
 ## 6. Feature classification
 
-| Area | v0.1 status |
+| Area | v0.2 alpha status |
 |---|---|
 | AI Agent analysis | Supported at a static prompt/component level; deeper semantics experimental |
 | Plugin | Explicit trusted scanner framework implemented; distribution/store planned |
 | Skill | `SKILL.md` identification, capability hints, and prompt-pattern review implemented |
 | CLI | Implemented |
+| Desktop GUI | Experimental bilingual interface implemented; Windows portable recipe validated |
 | Developer tools | JSON/Markdown output, rules, plugins, tests implemented |
 | Automation | JSON output and GitHub CI implemented; hosted issue/PR automation planned |
 | Code analysis | Implemented for supported text languages and manifests |
-| Optional code-execution sandbox | Planned; no target execution exists in v0.1 |
+| Optional code-execution sandbox | Planned; no target execution exists in v0.2 alpha |
 | Third-party contributions | Governance and extension docs implemented; ecosystem grows after launch |
 | MCP | Config/server/tool capability scanning implemented; protocol-wide semantic analysis planned |
 
@@ -63,7 +65,9 @@ The project must handle malicious code and scripts, prompt injection, API-key le
 unauthorized network requests, filesystem damage, archive traversal, supply-chain attacks,
 third-party plugins/contributions, and malicious GitHub repositories. Parser denial of service,
 Unicode/case path collisions, dependency compromise, false reassurance, and report injection are
-additional concerns. Controls and residual risks are documented in `security-model.md`.
+additional concerns. Desktop-specific risks include UI denial of service, unsafe export paths,
+background-thread lifecycle errors, optional-key handling, and compromised build artifacts.
+Controls and residual risks are documented in `security-model.md`.
 
 ## 8. How Codex Security can help
 
