@@ -1,3 +1,6 @@
+import pytest
+from pydantic import ValidationError
+
 from safeinstall.models import Capability, Severity
 from safeinstall.rules.engine import RuleEngine
 from safeinstall.rules.models import RuleDefinition
@@ -30,3 +33,27 @@ def test_rule_engine_reports_matching_line_as_observed_evidence() -> None:
     assert findings[0].evidence[0].path == "installer.py"
     assert findings[0].evidence[0].line == 2
     assert findings[0].evidence[0].snippet == "run('echo example', shell=True)"
+
+
+@pytest.mark.parametrize(
+    "pattern",
+    (
+        r"(a+)+$",
+        r"(a|aa)+$",
+        r"(a)\1",
+        r"a*a*",
+    ),
+)
+def test_rule_definition_rejects_backtracking_prone_patterns(pattern: str) -> None:
+    with pytest.raises(ValidationError, match="unsafe regular expression"):
+        RuleDefinition(
+            id="SI-PY-099",
+            name="Unsafe fixture",
+            description="A deliberately unsafe regular-expression fixture.",
+            severity=Severity.LOW,
+            category="test_fixture",
+            language="python",
+            pattern=pattern,
+            explanation="This fixture must be rejected before scanning.",
+            recommendation="Use a bounded pattern.",
+        )

@@ -6,11 +6,42 @@ import ast
 from typing import Any
 from urllib.parse import urlsplit
 
-from safeinstall.models import Capability, Evidence, Finding, Severity, SourceFile
+from safeinstall.models import (
+    Capability,
+    Evidence,
+    Finding,
+    FindingConfidence,
+    Severity,
+    SourceFile,
+)
 from safeinstall.redaction import redact_text
 
-_NETWORK_ROOTS = {"aiohttp", "httpx", "requests", "socket", "urllib", "websockets"}
-_NETWORK_METHODS = {"delete", "get", "head", "open", "patch", "post", "put", "request", "urlopen"}
+_NETWORK_ROOTS = {
+    "aiohttp",
+    "httpx",
+    "requests",
+    "socket",
+    "urllib",
+    "websocket",
+    "websockets",
+}
+_NETWORK_METHODS = {
+    "connect",
+    "create_connection",
+    "delete",
+    "get",
+    "head",
+    "open",
+    "patch",
+    "post",
+    "put",
+    "request",
+    "send",
+    "sendall",
+    "sendto",
+    "socket",
+    "urlopen",
+}
 _READ_METHODS = {"read_bytes", "read_text", "readFile", "readFileSync"}
 _WRITE_METHODS = {"append_text", "write_bytes", "write_text", "writeFile", "writeFileSync"}
 _DELETE_NAMES = {"os.remove", "os.rmdir", "os.unlink", "shutil.rmtree"}
@@ -51,15 +82,15 @@ class PythonBehaviorScanner:
 
             network = _network_details(call, name)
             if network is not None:
-                method, destination, domain = network
+                method, destination, domain, transport, network_target = network
                 severity = Severity.INFO if domain in _KNOWN_INFORMATIONAL_DOMAINS else Severity.LOW
                 findings.append(
                     _finding(
                         source,
                         call,
                         rule_id="SI-PY-021",
-                        name="Outbound network request",
-                        description=f"The program can make an outbound {method} request.",
+                        name=_network_finding_name(transport),
+                        description=_network_description(method, transport),
                         severity=severity,
                         category="network_access",
                         explanation=(
@@ -74,9 +105,58 @@ class PythonBehaviorScanner:
                             "method": method,
                             "destination": destination,
                             "domain": domain,
+                            "transport": transport,
                         },
                     )
                 )
+                if len(findings) < MAX_FINDINGS_PER_FILE and _has_upload_payload(call, method):
+                    findings.append(
+                        _finding(
+                            source,
+                            call,
+                            rule_id="SI-PY-025",
+                            name="Potential outbound data upload",
+                            description=(
+                                f"The {method} request includes a body that can send data away "
+                                "from this computer."
+                            ),
+                            severity=Severity.LOW,
+                            category="network_upload",
+                            explanation=(
+                                "Sending data is common for APIs and telemetry. Review what is "
+                                "included and who controls the destination."
+                            ),
+                            recommendation="Review the request body and destination.",
+                            capabilities=(Capability.NETWORK_ACCESS,),
+                            confidence=FindingConfidence.INFERRED,
+                            metadata={"method": method, "destination": destination},
+                        )
+                    )
+                service_hint = _network_service_hint(network_target)
+                if len(findings) < MAX_FINDINGS_PER_FILE and service_hint is not None:
+                    findings.append(
+                        _finding(
+                            source,
+                            call,
+                            rule_id="SI-PY-026",
+                            name="Telemetry or webhook destination hint",
+                            description=(
+                                f"The destination text resembles a {service_hint} endpoint."
+                            ),
+                            severity=Severity.LOW,
+                            category="network_service_hint",
+                            explanation=(
+                                "The endpoint name suggests telemetry or webhook traffic, but its "
+                                "actual purpose cannot be proven from the name alone."
+                            ),
+                            recommendation=(
+                                "Review the payload, privacy expectations, and endpoint owner."
+                            ),
+                            capabilities=(Capability.NETWORK_ACCESS,),
+                            confidence=FindingConfidence.INFERRED,
+                            metadata={"hint": service_hint, "destination": destination},
+                        )
+                    )
 
             filesystem = _filesystem_details(call, name)
             if filesystem is not None:
@@ -150,7 +230,7 @@ def _qualified_name(node: ast.AST, aliases: dict[str, str]) -> str | None:
     return None
 
 
-def _network_details(call: ast.Call, name: str | None) -> tuple[str, str, str] | None:
+def _network_details(call: ast.Call, name: str | None) -> tuple[str, str, str, str, str] | None:
     if not name:
         return None
     parts = name.split(".")
@@ -159,7 +239,9 @@ def _network_details(call: ast.Call, name: str | None) -> tuple[str, str, str] |
     method = parts[-1].upper()
     if method in {"OPEN", "REQUEST", "URLOPEN"}:
         method = _request_method_keyword(call) or "REQUEST"
-    url = _first_string_argument(call)
+    elif method in {"CONNECT", "CREATE_CONNECTION"}:
+        method = "CONNECT"
+    url = _first_network_target(call)
     domain = "dynamic"
     destination = "unknown"
     if url:
@@ -171,7 +253,10 @@ def _network_details(call: ast.Call, name: str | None) -> tuple[str, str, str] |
             domain = hostname.casefold()
             if domain in _KNOWN_INFORMATIONAL_DOMAINS:
                 destination = "github"
-    return method, destination, domain
+        elif "://" not in url:
+            domain = url.casefold()
+    transport = _network_transport(parts[0], url)
+    return method, destination, domain, transport, url or "dynamic"
 
 
 def _request_method_keyword(call: ast.Call) -> str | None:
@@ -185,7 +270,7 @@ def _request_method_keyword(call: ast.Call) -> str | None:
     return None
 
 
-def _first_string_argument(call: ast.Call) -> str | None:
+def _first_network_target(call: ast.Call) -> str | None:
     for argument in call.args:
         if (
             isinstance(argument, ast.Constant)
@@ -200,6 +285,56 @@ def _first_string_argument(call: ast.Call) -> str | None:
             and isinstance(keyword.value.value, str)
         ):
             return keyword.value.value
+    if call.args and isinstance(call.args[0], (ast.Tuple, ast.List)):
+        elements = call.args[0].elts
+        if (
+            elements
+            and isinstance(elements[0], ast.Constant)
+            and isinstance(elements[0].value, str)
+        ):
+            return elements[0].value
+    return None
+
+
+def _network_transport(root: str, target: str | None) -> str:
+    if root in {"websocket", "websockets"} or (
+        target is not None and target.casefold().startswith(("ws://", "wss://"))
+    ):
+        return "websocket"
+    if root == "socket":
+        return "socket"
+    return "http"
+
+
+def _network_finding_name(transport: str) -> str:
+    return {
+        "websocket": "WebSocket connection",
+        "socket": "Raw socket capability",
+    }.get(transport, "Outbound network request")
+
+
+def _network_description(method: str, transport: str) -> str:
+    if transport == "websocket":
+        return "The program can open a two-way WebSocket connection."
+    if transport == "socket":
+        return "The program can create or use a low-level network socket."
+    return f"The program can make an outbound {method} request."
+
+
+def _has_upload_payload(call: ast.Call, method: str) -> bool:
+    if method not in {"PATCH", "POST", "PUT", "SEND", "SENDALL", "SENDTO"}:
+        return False
+    return len(call.args) > 1 or any(
+        keyword.arg in {"body", "content", "data", "files", "json"} for keyword in call.keywords
+    )
+
+
+def _network_service_hint(target: str) -> str | None:
+    normalized = target.casefold()
+    if "webhook" in normalized or "hooks.slack" in normalized:
+        return "webhook"
+    if any(marker in normalized for marker in ("telemetry", "analytics", "/events", "sentry.io")):
+        return "telemetry"
     return None
 
 
@@ -325,6 +460,7 @@ def _finding(
     explanation: str,
     recommendation: str,
     capabilities: tuple[Capability, ...],
+    confidence: FindingConfidence = FindingConfidence.OBSERVED,
     metadata: dict[str, Any] | None = None,
 ) -> Finding:
     line = getattr(node, "lineno", 1)
@@ -346,5 +482,6 @@ def _finding(
             ),
         ),
         capabilities=capabilities,
+        confidence=confidence,
         metadata=metadata or {},
     )

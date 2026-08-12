@@ -50,17 +50,16 @@
     - filesystem_write
 
 - id: SI-SH-005
-  name: Privileged or persistent system change
-  description: The script invokes sudo, systemctl, or crontab.
+  name: Privileged command request
+  description: The script invokes sudo to request elevated execution.
   severity: high
-  category: system_change
+  category: privilege_escalation
   language: shell
-  pattern: '\b(?:sudo|systemctl|crontab)\b'
-  explanation: This command may change system-wide settings, services, scheduled tasks, or privileges.
-  recommendation: Review the exact command and run it only when the system-level change is expected.
+  pattern: '\bsudo\b'
+  explanation: This command can ask to run another operation with elevated privileges. It does not by itself create persistence.
+  recommendation: Review the complete elevated command and confirm that system-level access is necessary.
   capabilities:
     - privilege_escalation
-    - persistence
 
 - id: SI-SH-006
   name: Network download
@@ -85,3 +84,37 @@
   recommendation: Review the remote host, authentication method, and transferred paths.
   capabilities:
     - network_access
+
+- id: SI-SH-008
+  name: System service or schedule access
+  description: The script invokes systemctl or crontab.
+  severity: medium
+  category: system_configuration
+  language: shell
+  pattern: '\b(?:systemctl|crontab)\b'
+  explanation: This command can inspect or change services and scheduled tasks. The command name alone does not prove that a persistent change is made.
+  recommendation: Review the subcommand and arguments to determine whether system state is modified.
+
+- id: SI-SH-009
+  name: Persistent service or schedule change
+  description: The script enables a service or modifies a user's scheduled tasks.
+  severity: high
+  category: persistence
+  language: shell
+  pattern: '\bsystemctl\s+(?:enable|reenable)\b|\bcrontab\s+(?:-[er]\b|[^-\s#][^\s#]*)'
+  explanation: Enabling a service or installing or editing a crontab can arrange for commands to run again later.
+  recommendation: Review the enabled service or complete schedule and confirm that persistence is expected.
+  capabilities:
+    - persistence
+
+- id: SI-SH-010
+  name: Git repository operation
+  description: The script invokes a Git command that can inspect or change repository state.
+  severity: low
+  category: git_operation
+  language: shell
+  pattern: '\bgit\s+(?:clone|fetch|pull|push|checkout|switch|reset|clean|submodule|worktree|commit|tag|branch)\b'
+  explanation: This script can read or change Git repository state or communicate with a Git remote. That capability is common in developer tooling.
+  recommendation: Review the repository, remote, ref, and arguments used by the Git command.
+  capabilities:
+    - git_operations

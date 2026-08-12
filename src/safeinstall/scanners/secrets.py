@@ -90,7 +90,7 @@ class SecretScanner:
                         "Confirm the file is excluded from version control and contains no live "
                         "credentials before sharing the project."
                     ),
-                    evidence=(Evidence(path=source.path),),
+                    evidence=(Evidence(path=source.path, line=1),),
                 )
             )
         for line_number, line in enumerate(source.content.splitlines(), start=1):

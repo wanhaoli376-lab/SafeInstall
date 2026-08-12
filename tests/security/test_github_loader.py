@@ -78,3 +78,27 @@ def test_github_clone_uses_canonical_url_as_one_argument_and_cleans_workspace(
         assert clone_environment["GIT_ALLOW_PROTOCOL"] == "https"
 
     assert not checkout.exists()
+
+
+def test_checkout_validation_hides_low_level_filesystem_details(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = SuccessfulGitRunner()
+    loader = GitHubLoader(runner=runner, temp_parent=tmp_path)
+
+    def fail_validation(_checkout: Path) -> None:
+        raise OSError("attacker-controlled filename")
+
+    monkeypatch.setattr(loader, "_validate_checkout", fail_validation)
+
+    with (
+        pytest.raises(
+            RepositoryLoadError,
+            match="Could not safely validate the repository checkout",
+        ) as error,
+        loader.open("https://github.com/example/project"),
+    ):
+        pytest.fail("validation failure must stop loading")
+
+    assert "attacker-controlled filename" not in str(error.value)

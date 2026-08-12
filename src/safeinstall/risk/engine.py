@@ -78,8 +78,10 @@ class RiskEngine:
             score = max(55, score)
             reasons.append("Downloaded content can be executed without a separate review step.")
 
-        if summary.enabled(Capability.PRIVILEGE_ESCALATION) and summary.enabled(
-            Capability.PERSISTENCE
+        if _has_distinct_capability_evidence(
+            findings,
+            Capability.PRIVILEGE_ESCALATION,
+            Capability.PERSISTENCE,
         ):
             score = max(65, score + 15)
             reasons.append("The software may combine elevated privileges with persistent changes.")
@@ -101,3 +103,21 @@ class RiskEngine:
             if reason not in reasons:
                 reasons.append(reason)
         return reasons
+
+
+def _has_distinct_capability_evidence(
+    findings: tuple[Finding, ...],
+    first: Capability,
+    second: Capability,
+) -> bool:
+    first_evidence = {
+        (finding.rule_id, finding.evidence[0].path, finding.evidence[0].line)
+        for finding in findings
+        if first in finding.capabilities
+    }
+    second_evidence = {
+        (finding.rule_id, finding.evidence[0].path, finding.evidence[0].line)
+        for finding in findings
+        if second in finding.capabilities
+    }
+    return any(left != right for left in first_evidence for right in second_evidence)

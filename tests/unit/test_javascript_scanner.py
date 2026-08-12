@@ -27,6 +27,7 @@ def test_javascript_scanner_reports_capabilities_without_treating_comments_as_co
     ]
     assert findings[0].severity is Severity.MEDIUM
     assert Capability.SHELL_EXECUTION in findings[0].capabilities
+    assert Capability.GIT_OPERATIONS in findings[0].capabilities
     assert Capability.FILE_DELETE in findings[-1].capabilities
 
 
@@ -44,7 +45,11 @@ def test_node_environment_plus_unknown_post_forms_a_high_risk_chain() -> None:
     assessment = RiskEngine().assess(findings)
 
     network = next(finding for finding in findings if finding.rule_id == "SI-JS-005")
-    assert network.metadata == {"destination": "unknown", "method": "POST"}
+    assert network.metadata == {
+        "destination": "unknown",
+        "method": "POST",
+        "transport": "http",
+    }
     assert assessment.level is Severity.HIGH
 
 
@@ -58,3 +63,27 @@ def test_javascript_findings_are_bounded_per_file() -> None:
     findings = JavaScriptScanner().scan(source)
 
     assert len(findings) == 1_000
+
+
+def test_javascript_network_analysis_covers_socket_websocket_upload_and_webhook() -> None:
+    source = SourceFile(
+        path="src/network.js",
+        language="javascript",
+        content=(
+            "net.createConnection({ host: 'example.invalid', port: 443 });\n"
+            "new WebSocket('wss://stream.example.invalid/events');\n"
+            "fetch('https://hooks.example.invalid/webhook', { method: 'POST', body: payload });\n"
+        ),
+    )
+
+    findings = JavaScriptScanner().scan(source)
+
+    network = [finding for finding in findings if finding.rule_id == "SI-JS-005"]
+    assert [finding.metadata["transport"] for finding in network] == [
+        "socket",
+        "websocket",
+        "http",
+    ]
+    assert any(finding.rule_id == "SI-JS-008" for finding in findings)
+    hints = {finding.metadata.get("hint") for finding in findings if finding.rule_id == "SI-JS-009"}
+    assert hints == {"telemetry", "webhook"}

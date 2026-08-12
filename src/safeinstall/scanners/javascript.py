@@ -7,7 +7,14 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from itertools import islice
 
-from safeinstall.models import Capability, Evidence, Finding, Severity, SourceFile
+from safeinstall.models import (
+    Capability,
+    Evidence,
+    Finding,
+    FindingConfidence,
+    Severity,
+    SourceFile,
+)
 from safeinstall.redaction import redact_text
 
 MAX_FINDINGS_PER_FILE = 1_000
@@ -25,6 +32,7 @@ class _Match:
     explanation: str
     recommendation: str
     capabilities: tuple[Capability, ...]
+    confidence: FindingConfidence = FindingConfidence.OBSERVED
     metadata: dict[str, str] | None = None
 
 
@@ -45,6 +53,10 @@ class JavaScriptScanner:
         ):
             method = match.group(1)
             severity = Severity.HIGH if method == "exec" else Severity.MEDIUM
+            original_line = source.line(_line_number(code, match.start()))
+            capabilities = (Capability.SHELL_EXECUTION,)
+            if _javascript_starts_git(original_line):
+                capabilities = (*capabilities, Capability.GIT_OPERATIONS)
             matches.append(
                 _match(
                     source,
@@ -60,7 +72,7 @@ class JavaScriptScanner:
                         "the program's reach."
                     ),
                     recommendation="Review the executable, arguments, and source of any input.",
-                    capabilities=(Capability.SHELL_EXECUTION,),
+                    capabilities=capabilities,
                 )
             )
 
@@ -134,20 +146,34 @@ class JavaScriptScanner:
 
         for match in _bounded_matches(
             r"(?:\bfetch\s*\(|\baxios\s*\.\s*(?:get|post|put|patch|delete|request)\s*\("
-            r"|\bhttps?\s*\.\s*(?:get|request)\s*\()",
+            r"|\bhttps?\s*\.\s*(?:get|request)\s*\("
+            r"|\b(?:new\s+)?WebSocket\s*\("
+            r"|\bws\s*\.\s*(?:connect|createWebSocketStream)\s*\("
+            r"|\bnet\s*\.\s*(?:connect|createConnection)\s*\("
+            r"|\bdgram\s*\.\s*createSocket\s*\()",
             code,
             len(matches),
         ):
             original_line = source.line(_line_number(code, match.start()))
             known_github = "api.github.com" in original_line.casefold()
             method = _javascript_network_method(match.group(0), original_line)
+            transport = _javascript_network_transport(match.group(0))
             matches.append(
                 _match(
                     source,
                     match,
                     rule_id="SI-JS-005",
-                    name="Network access",
-                    description="The program can make an outbound network request.",
+                    name={
+                        "websocket": "WebSocket connection",
+                        "socket": "Raw socket capability",
+                    }.get(transport, "Network access"),
+                    description=(
+                        "The program can open a two-way WebSocket connection."
+                        if transport == "websocket"
+                        else "The program can create or use a low-level network socket."
+                        if transport == "socket"
+                        else "The program can make an outbound network request."
+                    ),
                     severity=Severity.INFO if known_github else Severity.LOW,
                     category="network_access",
                     explanation=(
@@ -161,9 +187,58 @@ class JavaScriptScanner:
                     metadata={
                         "destination": "github" if known_github else "unknown",
                         "method": method,
+                        "transport": transport,
                     },
                 )
             )
+            if method in {"PATCH", "POST", "PUT"} and len(matches) < MAX_FINDINGS_PER_FILE:
+                matches.append(
+                    _match(
+                        source,
+                        match,
+                        rule_id="SI-JS-008",
+                        name="Potential outbound data upload",
+                        description=(
+                            f"The {method} request can send a request body away from this computer."
+                        ),
+                        severity=Severity.LOW,
+                        category="network_upload",
+                        explanation=(
+                            "Sending data is common for APIs and telemetry. Review the payload "
+                            "and who controls the destination."
+                        ),
+                        recommendation="Review the request body and destination.",
+                        capabilities=(Capability.NETWORK_ACCESS,),
+                        confidence=FindingConfidence.INFERRED,
+                        metadata={
+                            "destination": "github" if known_github else "unknown",
+                            "method": method,
+                        },
+                    )
+                )
+            service_hint = _javascript_network_service_hint(original_line)
+            if service_hint is not None and len(matches) < MAX_FINDINGS_PER_FILE:
+                matches.append(
+                    _match(
+                        source,
+                        match,
+                        rule_id="SI-JS-009",
+                        name="Telemetry or webhook destination hint",
+                        description=f"The destination text resembles a {service_hint} endpoint.",
+                        severity=Severity.LOW,
+                        category="network_service_hint",
+                        explanation=(
+                            "The endpoint name suggests telemetry or webhook traffic, but its "
+                            "actual purpose cannot be proven from the name alone."
+                        ),
+                        recommendation=(
+                            "Review the payload, privacy expectations, and endpoint owner."
+                        ),
+                        capabilities=(Capability.NETWORK_ACCESS,),
+                        confidence=FindingConfidence.INFERRED,
+                        metadata={"hint": service_hint},
+                    )
+                )
 
         for match in _bounded_matches(r"\bprocess\s*\.\s*env(?:\b|\s*\[)", code, len(matches)):
             matches.append(
@@ -240,6 +315,7 @@ def _to_finding(source: SourceFile, match: _Match) -> Finding:
             ),
         ),
         capabilities=match.capabilities,
+        confidence=match.confidence,
         metadata=match.metadata or {},
     )
 
@@ -254,6 +330,11 @@ def _bounded_matches(pattern: str, text: str, already_emitted: int) -> Iterator[
 
 
 def _javascript_network_method(matched_text: str, original_line: str) -> str:
+    normalized = matched_text.casefold()
+    if "websocket" in normalized or re.search(r"\b(?:ws|net)\s*\.", normalized):
+        return "CONNECT"
+    if re.search(r"\bdgram\s*\.", normalized):
+        return "SOCKET"
     method = re.search(
         r"\.\s*(get|post|put|patch|delete|request)\s*\(",
         matched_text,
@@ -267,6 +348,35 @@ def _javascript_network_method(matched_text: str, original_line: str) -> str:
         re.IGNORECASE,
     )
     return fetch_method.group(1).upper() if fetch_method is not None else "GET"
+
+
+def _javascript_network_transport(matched_text: str) -> str:
+    normalized = matched_text.casefold()
+    if "websocket" in normalized or re.search(r"\bws\s*\.", normalized):
+        return "websocket"
+    if re.search(r"\b(?:net|dgram)\s*\.", normalized):
+        return "socket"
+    return "http"
+
+
+def _javascript_network_service_hint(line: str) -> str | None:
+    normalized = line.casefold()
+    if "webhook" in normalized or "hooks.slack" in normalized:
+        return "webhook"
+    if any(marker in normalized for marker in ("telemetry", "analytics", "/events", "sentry.io")):
+        return "telemetry"
+    return None
+
+
+def _javascript_starts_git(line: str) -> bool:
+    return (
+        re.search(
+            r"\bchild_process\s*\.\s*(?:execFile|spawn)\s*\(\s*['\"]git(?:\.exe)?['\"]",
+            line,
+            re.IGNORECASE,
+        )
+        is not None
+    )
 
 
 def _mask_javascript_comments_and_strings(text: str) -> str:

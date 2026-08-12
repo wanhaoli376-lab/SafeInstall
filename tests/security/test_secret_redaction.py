@@ -68,6 +68,7 @@ def test_dotenv_file_is_reported_without_exposing_its_contents() -> None:
 
     assert len(findings) == 1
     assert findings[0].rule_id == "SI-SEC-007"
+    assert findings[0].evidence[0].line == 1
     assert findings[0].evidence[0].snippet is None
 
 

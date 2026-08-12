@@ -7,6 +7,7 @@ import re
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from safeinstall.models import Capability, CategoryName, LanguageName, RuleId, Severity
+from safeinstall.rules.regex_safety import UnsafeRegexError, validate_regex_structure
 
 
 class RuleDefinition(BaseModel):
@@ -30,6 +31,9 @@ class RuleDefinition(BaseModel):
     def pattern_must_compile(cls, value: str) -> str:
         try:
             re.compile(value)
+            validate_regex_structure(value)
         except re.error as exc:
             raise ValueError(f"invalid regular expression: {exc}") from exc
+        except UnsafeRegexError as exc:
+            raise ValueError(f"unsafe regular expression: {exc}") from exc
         return value

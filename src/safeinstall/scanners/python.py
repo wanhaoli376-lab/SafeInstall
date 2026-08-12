@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import re
 from itertools import islice
 
 from safeinstall.models import Capability, Evidence, Finding, Severity, SourceFile
@@ -54,6 +55,9 @@ class PythonScanner:
                 break
             name = _qualified_name(call.func, aliases)
             if name in self._SUBPROCESS_CALLS:
+                capabilities = (Capability.SHELL_EXECUTION,)
+                if _subprocess_starts_git(call):
+                    capabilities = (*capabilities, Capability.GIT_OPERATIONS)
                 shell_enabled = any(
                     keyword.arg == "shell"
                     and isinstance(keyword.value, ast.Constant)
@@ -80,6 +84,7 @@ class PythonScanner:
                                 "Review how the command is built and prefer an argument list "
                                 "without shell=True."
                             ),
+                            capabilities=capabilities,
                         )
                     )
                 else:
@@ -98,6 +103,7 @@ class PythonScanner:
                             recommendation=(
                                 "Review the executable and arguments before running the project."
                             ),
+                            capabilities=capabilities,
                         )
                     )
                 continue
@@ -215,6 +221,23 @@ def _uses_safe_yaml_loader(call: ast.Call) -> bool:
             return keyword.value.id in safe_names
         if isinstance(keyword.value, ast.Attribute):
             return keyword.value.attr in safe_names
+    return False
+
+
+def _subprocess_starts_git(call: ast.Call) -> bool:
+    if not call.args:
+        return False
+    command = call.args[0]
+    if isinstance(command, ast.Constant) and isinstance(command.value, str):
+        return re.match(r"^\s*git(?:\.exe)?(?:\s|$)", command.value, re.IGNORECASE) is not None
+    if isinstance(command, (ast.List, ast.Tuple)) and command.elts:
+        executable = command.elts[0]
+        return (
+            isinstance(executable, ast.Constant)
+            and isinstance(executable.value, str)
+            and executable.value.casefold().replace("\\", "/").rsplit("/", 1)[-1]
+            in {"git", "git.exe"}
+        )
     return False
 
 

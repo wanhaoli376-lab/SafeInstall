@@ -64,5 +64,8 @@ python -m ruff format --check .
 
 Rule files are loaded as data with safe YAML, resource limits, a strict Pydantic schema, compiled
 regular-expression validation, and duplicate-ID rejection. YAML tags cannot turn a rule into
-executable Python. A rule that needs unbounded or pathological regular expressions will not be
-accepted; prefer a purpose-built scanner.
+executable Python. SafeInstall rejects backreferences, nested repetition, repeated alternatives,
+and overlapping adjacent repetitions, and caps both pattern length and scanned line length. These
+conservative checks reduce common backtracking risks but do not prove runtime complexity for every
+expression. Reviewers must still reject pathological patterns; prefer a purpose-built scanner when
+a bounded expression is not enough.

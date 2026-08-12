@@ -22,6 +22,7 @@ def test_python_scanner_distinguishes_shell_true_from_plain_subprocess() -> None
     ]
     assert findings[1].evidence[0].line == 4
     assert Capability.SHELL_EXECUTION in findings[1].capabilities
+    assert Capability.GIT_OPERATIONS in findings[0].capabilities
 
 
 def test_python_scanner_detects_shell_and_dynamic_code_calls_through_aliases() -> None:

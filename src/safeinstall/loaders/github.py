@@ -131,7 +131,14 @@ class GitHubLoader:
             if result.returncode != 0:
                 detail = redact_text(result.stderr.strip())[:500]
                 raise RepositoryLoadError(f"Git clone failed: {detail or 'unknown error'}")
-            self._validate_checkout(checkout)
+            try:
+                self._validate_checkout(checkout)
+            except RepositoryLoadError:
+                raise
+            except OSError as exc:
+                raise RepositoryLoadError(
+                    "Could not safely validate the repository checkout."
+                ) from exc
             commit = self._git_value(checkout, ("rev-parse", "HEAD"), environment)
             branch = self._git_value(checkout, ("branch", "--show-current"), environment)
             yield LoadedTarget(

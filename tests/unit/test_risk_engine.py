@@ -64,3 +64,37 @@ def test_repeated_low_findings_do_not_become_high_by_count_alone() -> None:
 
     assert assessment.level is Severity.LOW
     assert assessment.score < 20
+
+
+def test_privilege_and_persistence_chain_requires_distinct_evidence() -> None:
+    combined = _finding(
+        rule_id="SI-SH-099",
+        name="Ambiguous system command",
+        category="system_change",
+        capability=Capability.PRIVILEGE_ESCALATION,
+        line=1,
+    ).model_copy(
+        update={
+            "capabilities": (
+                Capability.PRIVILEGE_ESCALATION,
+                Capability.PERSISTENCE,
+            )
+        }
+    )
+
+    ambiguous = RiskEngine().assess((combined,))
+    independent = RiskEngine().assess(
+        (
+            combined.model_copy(update={"capabilities": (Capability.PRIVILEGE_ESCALATION,)}),
+            _finding(
+                rule_id="SI-SH-100",
+                name="Scheduled task change",
+                category="persistence",
+                capability=Capability.PERSISTENCE,
+                line=2,
+            ),
+        )
+    )
+
+    assert not any("persistent" in reason.lower() for reason in ambiguous.primary_reasons)
+    assert any("persistent" in reason.lower() for reason in independent.primary_reasons)
