@@ -1,18 +1,56 @@
-name: Build desktop artifacts
+name: Build and publish desktop alpha
 
 on:
   workflow_dispatch:
   push:
-    tags: ["v*-alpha*"]
+    tags:
+      - "v*-alpha.*"
 
 permissions:
   contents: read
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  RELEASE_CONSTRAINT: constraints/release-python311.txt
+
 jobs:
-  windows-portable:
+  validate-release:
+    name: Validate release contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      - name: Validate package and tag versions
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            python tools/release.py validate-version --root . --tag "${GITHUB_REF_NAME}"
+          else
+            python tools/release.py validate-version --root .
+          fi
+
+  windows-build:
     name: Windows x64 portable
+    needs: validate-release
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
+    permissions:
+      contents: read
 
     steps:
       - name: Check out source
@@ -25,39 +63,90 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            constraints/release-python311.txt
 
-      - name: Install desktop packaging dependencies
-        run: python -m pip install -e ".[gui,packaging]"
+      - name: Install constrained desktop packaging dependencies
+        shell: pwsh
+        run: |
+          $env:PIP_CONSTRAINT = (Resolve-Path $env:RELEASE_CONSTRAINT).Path
+          python -m pip install --constraint $env:PIP_CONSTRAINT -e ".[gui,packaging]"
+          python -m pip check
+          python -c "import importlib.util; assert importlib.util.find_spec('openai') is None"
 
       - name: Build one-folder application
         run: python -m PyInstaller --noconfirm --clean packaging/safeinstall.spec
 
-      - name: Smoke-test packaged application
+      - name: Smoke-test packaged application without AI
         shell: pwsh
         run: |
-          $process = Start-Process -FilePath "dist\SafeInstall\SafeInstall.exe" `
-            -ArgumentList "--smoke-test","-platform","offscreen" `
-            -WindowStyle Hidden -Wait -PassThru
+          Remove-Item Env:OPENAI_API_KEY -ErrorAction SilentlyContinue
+          $env:QT_QPA_PLATFORM = "offscreen"
+          $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+          $startInfo.FileName = (Resolve-Path "dist\SafeInstall\SafeInstall.exe").Path
+          $startInfo.UseShellExecute = $false
+          $startInfo.CreateNoWindow = $true
+          [void]$startInfo.ArgumentList.Add("--smoke-test")
+          $process = [System.Diagnostics.Process]::Start($startInfo)
+          $process.WaitForExit()
           if ($process.ExitCode -ne 0) {
-            throw "Packaged SafeInstall exited with code $($process.ExitCode)"
+            throw "Packaged SafeInstall smoke test exited with code $($process.ExitCode)"
           }
 
-      - name: Create portable ZIP
+      - name: Smoke-scan local folder and ZIP without AI
         shell: pwsh
-        run: Compress-Archive -Path dist\SafeInstall -DestinationPath SafeInstall-Windows-x64.zip
+        run: |
+          Remove-Item Env:OPENAI_API_KEY -ErrorAction SilentlyContinue
+          $env:QT_QPA_PLATFORM = "offscreen"
+          $targetRoot = Join-Path $env:RUNNER_TEMP "测试用户\My Projects\Test Project"
+          New-Item -ItemType Directory -Path $targetRoot -Force | Out-Null
+          Copy-Item -Path "examples\safe-project\*" -Destination $targetRoot -Recurse
 
-      - name: Upload Windows artifact
+          function Invoke-SafeInstallSmokeScan([string]$target) {
+            $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+            $startInfo.FileName = (Resolve-Path "dist\SafeInstall\SafeInstall.exe").Path
+            $startInfo.UseShellExecute = $false
+            $startInfo.CreateNoWindow = $true
+            [void]$startInfo.ArgumentList.Add("--smoke-scan")
+            [void]$startInfo.ArgumentList.Add($target)
+            $process = [System.Diagnostics.Process]::Start($startInfo)
+            $process.WaitForExit()
+            if ($process.ExitCode -ne 0) {
+              throw "Packaged SafeInstall scan exited with code $($process.ExitCode)"
+            }
+          }
+
+          Invoke-SafeInstallSmokeScan $targetRoot
+
+          $archivePath = Join-Path $env:RUNNER_TEMP "测试项目 archive.zip"
+          Compress-Archive -Path (Join-Path $targetRoot "*") -DestinationPath $archivePath
+          Invoke-SafeInstallSmokeScan $archivePath
+
+      - name: Create stable Windows portable asset
+        shell: pwsh
+        run: |
+          Compress-Archive -LiteralPath "dist\SafeInstall" -DestinationPath "SafeInstall-Windows-x64.zip"
+          if ((Get-Item "SafeInstall-Windows-x64.zip").Length -le 0) {
+            throw "Windows release ZIP is empty"
+          }
+
+      - name: Upload Windows release input
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: SafeInstall-Windows-x64
+          name: release-windows
           path: SafeInstall-Windows-x64.zip
           if-no-files-found: error
           retention-days: 14
+          compression-level: 0
 
-  macos-app:
-    name: macOS app (unsigned development build)
+  macos-build:
+    name: macOS app (unsigned)
+    needs: validate-release
     runs-on: macos-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
+    permissions:
+      contents: read
 
     steps:
       - name: Check out source
@@ -70,23 +159,205 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            constraints/release-python311.txt
 
-      - name: Install desktop packaging dependencies
-        run: python -m pip install -e ".[gui,packaging]"
+      - name: Install constrained desktop packaging dependencies
+        shell: bash
+        run: |
+          export PIP_CONSTRAINT="$PWD/${RELEASE_CONSTRAINT}"
+          python -m pip install --constraint "${PIP_CONSTRAINT}" -e ".[gui,packaging]"
+          python -m pip check
+          python -c "import importlib.util; assert importlib.util.find_spec('openai') is None"
 
-      - name: Build application bundle
+      - name: Build unsigned application bundle
         run: python -m PyInstaller --noconfirm --clean packaging/safeinstall.spec
 
-      - name: Smoke-test packaged application
-        run: dist/SafeInstall.app/Contents/MacOS/SafeInstall --smoke-test
+      - name: Smoke-test and smoke-scan without AI
+        shell: bash
+        run: |
+          unset OPENAI_API_KEY
+          dist/SafeInstall.app/Contents/MacOS/SafeInstall --smoke-test
+          dist/SafeInstall.app/Contents/MacOS/SafeInstall \
+            --smoke-scan "examples/safe-project"
 
-      - name: Create app ZIP
-        run: ditto -c -k --sequesterRsrc --keepParent dist/SafeInstall.app SafeInstall-macOS.zip
+      - name: Create stable unsigned macOS asset
+        shell: bash
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent \
+            dist/SafeInstall.app SafeInstall-macOS-unsigned.zip
+          test -s SafeInstall-macOS-unsigned.zip
 
-      - name: Upload macOS artifact
+      - name: Upload macOS release input
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: SafeInstall-macOS
-          path: SafeInstall-macOS.zip
+          name: release-macos
+          path: SafeInstall-macOS-unsigned.zip
           if-no-files-found: error
           retention-days: 14
+          compression-level: 0
+
+  release-metadata:
+    name: Checksums and CycloneDX SBOM
+    needs:
+      - validate-release
+      - windows-build
+      - macos-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            constraints/release-python311.txt
+
+      - name: Download Windows release input
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-windows
+          path: release-assets
+
+      - name: Download macOS release input
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-macos
+          path: release-assets
+
+      - name: Generate reproducible Python-runtime SBOM
+        shell: bash
+        run: |
+          export PIP_CONSTRAINT="$PWD/${RELEASE_CONSTRAINT}"
+          python -m pip install --constraint "${PIP_CONSTRAINT}" cyclonedx-bom==7.3.1
+          python -m venv .release-runtime
+          .release-runtime/bin/python -m pip install \
+            --constraint "${PIP_CONSTRAINT}" ".[gui]"
+          cyclonedx-py environment .release-runtime/bin/python \
+            --pyproject pyproject.toml \
+            --mc-type application \
+            --spec-version 1.6 \
+            --output-format JSON \
+            --output-reproducible \
+            --output-file release-assets/SBOM.json
+
+      - name: Generate and verify release metadata
+        shell: bash
+        run: |
+          test -s release-assets/SafeInstall-Windows-x64.zip
+          test -s release-assets/SafeInstall-macOS-unsigned.zip
+          test -s release-assets/SBOM.json
+          python tools/release.py generate-checksums --directory release-assets
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            python tools/release.py verify-assets \
+              --directory release-assets --root . --tag "${GITHUB_REF_NAME}"
+          else
+            python tools/release.py verify-assets --directory release-assets --root .
+          fi
+          test -s release-assets/SHA256SUMS.txt
+
+      - name: Upload verified release bundle
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: verified-release-assets
+          path: |
+            release-assets/SafeInstall-Windows-x64.zip
+            release-assets/SafeInstall-macOS-unsigned.zip
+            release-assets/SHA256SUMS.txt
+            release-assets/SBOM.json
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+  publish-release:
+    name: Publish verified GitHub prerelease
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    needs:
+      - validate-release
+      - windows-build
+      - macos-build
+      - release-metadata
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      - name: Download verified release bundle
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: verified-release-assets
+          path: release-assets
+
+      - name: Revalidate publish inputs
+        shell: bash
+        run: |
+          python tools/release.py validate-version --root . --tag "${GITHUB_REF_NAME}"
+          python tools/release.py verify-assets \
+            --directory release-assets --root . --tag "${GITHUB_REF_NAME}"
+
+      - name: Create private draft prerelease
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            echo "A release already exists for ${GITHUB_REF_NAME}; refusing to overwrite it."
+            exit 1
+          fi
+          gh release create "${GITHUB_REF_NAME}" \
+            "release-assets/SafeInstall-Windows-x64.zip" \
+            "release-assets/SafeInstall-macOS-unsigned.zip" \
+            "release-assets/SHA256SUMS.txt" \
+            "release-assets/SBOM.json" \
+            --verify-tag \
+            --draft \
+            --prerelease \
+            --title "SafeInstall ${GITHUB_REF_NAME}" \
+            --notes-file "docs/releases/${GITHUB_REF_NAME}.md"
+
+      - name: Verify server-side draft assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "${GITHUB_REF_NAME}" \
+            --json tagName,isDraft,isPrerelease,assets > release-draft.json
+          python tools/release.py verify-release \
+            --metadata release-draft.json --tag "${GITHUB_REF_NAME}" --state draft
+          mkdir verified-download
+          gh release download "${GITHUB_REF_NAME}" --dir verified-download
+          python tools/release.py verify-assets \
+            --directory verified-download --root . --tag "${GITHUB_REF_NAME}"
+
+      - name: Publish prerelease and verify final state
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release edit "${GITHUB_REF_NAME}" --draft=false --prerelease
+          gh release view "${GITHUB_REF_NAME}" \
+            --json tagName,isDraft,isPrerelease,assets > release-published.json
+          python tools/release.py verify-release \
+            --metadata release-published.json --tag "${GITHUB_REF_NAME}" --state published
