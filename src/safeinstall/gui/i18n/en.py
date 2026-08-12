@@ -233,6 +233,7 @@ STRINGS = {
     "about.version": "Version",
     "about.license": "License",
     "about.license_value": "MIT License",
+    "about.feedback": "Feedback",
     "error.github.title": "Could not read this GitHub repository",
     "error.github.message": (
         "The repository may not exist or be public, Git may be unavailable, or this computer may "

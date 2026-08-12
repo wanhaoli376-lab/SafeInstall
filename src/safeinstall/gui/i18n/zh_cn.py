@@ -202,6 +202,7 @@ STRINGS = {
     "about.version": "版本",
     "about.license": "许可证",
     "about.license_value": "MIT 许可证",
+    "about.feedback": "问题反馈",
     "error.github.title": "无法读取该 GitHub 仓库",
     "error.github.message": (
         "仓库可能不存在或不是公开仓库，Git 可能不可用，或当前网络无法访问 GitHub。"

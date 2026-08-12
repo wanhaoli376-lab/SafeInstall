@@ -119,9 +119,16 @@ class AboutView(QWidget):
             "wanhaoli376-lab/SafeInstall</a>"
         )
         self.github_value.setOpenExternalLinks(True)
+        self.feedback_heading = QLabel()
+        self.feedback_value = QLabel(
+            '<a href="https://github.com/wanhaoli376-lab/SafeInstall/issues/new/choose">'
+            "GitHub Issues</a>"
+        )
+        self.feedback_value.setOpenExternalLinks(True)
         form.addRow(self.version_heading, self.version_value)
         form.addRow(self.license_heading, self.license_value)
         form.addRow(self.github_heading, self.github_value)
+        form.addRow(self.feedback_heading, self.feedback_value)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(120, 90, 120, 90)
@@ -144,6 +151,7 @@ class AboutView(QWidget):
         self.version_heading.setText(self.catalog.text("about.version"))
         self.license_heading.setText(self.catalog.text("about.license"))
         self.license_value.setText(self.catalog.text("about.license_value"))
+        self.feedback_heading.setText(self.catalog.text("about.feedback"))
 
 
 class ErrorView(QWidget):

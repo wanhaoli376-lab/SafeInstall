@@ -50,7 +50,13 @@ def test_about_page_uses_repository_version_and_license(qtbot: object) -> None:
 
     assert window.about_view.version_value.text().startswith("0.")
     assert "wanhaoli376-lab/SafeInstall" in window.about_view.github_value.text()
+    assert "issues/new/choose" in window.about_view.feedback_value.text()
+    assert window.about_view.feedback_heading.text() == "Feedback"
     assert window.about_view.license_value.text() == "MIT License"
+
+    window.set_locale("zh_CN")
+
+    assert window.about_view.feedback_heading.text() == "问题反馈"
 
 
 def test_home_selection_field_labels_retranslate(qtbot: object) -> None:
