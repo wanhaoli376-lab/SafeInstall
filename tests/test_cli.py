@@ -21,7 +21,7 @@ def test_version_reports_installed_version() -> None:
     result = runner.invoke(app, ["version"])
 
     assert result.exit_code == 0
-    assert result.stdout.strip() == "SafeInstall 0.2.0a1"
+    assert result.stdout.strip() == "SafeInstall 0.2.0a2"
 
 
 def test_scan_json_outputs_machine_readable_report_without_ai(tmp_path: Path) -> None:

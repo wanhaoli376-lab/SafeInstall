@@ -3,6 +3,9 @@ from pathlib import Path
 
 def test_release_constraints_pin_critical_build_and_runtime_dependencies() -> None:
     path = Path(__file__).parents[2] / "constraints" / "release-python311.txt"
+    assert path.read_text(encoding="utf-8").splitlines()[0] == (
+        "# SafeInstall v0.2.0-alpha.2 release constraints for CPython 3.11."
+    )
     requirements = [
         line.strip()
         for line in path.read_text(encoding="utf-8").splitlines()

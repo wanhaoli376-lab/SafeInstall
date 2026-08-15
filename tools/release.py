@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import plistlib
 import re
 import stat
 import tomllib
@@ -31,7 +32,7 @@ _CONSTRAINT_PIN = re.compile(
 )
 
 WINDOWS_ASSET = "SafeInstall-Windows-x64.zip"
-MACOS_ASSET = "SafeInstall-macOS-unsigned.zip"
+MACOS_ASSET = "SafeInstall-macOS-arm64-unsigned.zip"
 CHECKSUM_ASSET = "SHA256SUMS.txt"
 SBOM_ASSET = "SBOM.json"
 ARCHIVE_ASSETS = (WINDOWS_ASSET, MACOS_ASSET)
@@ -40,6 +41,7 @@ _REQUIRED_ARCHIVE_MEMBERS = {
     WINDOWS_ASSET: "SafeInstall/SafeInstall.exe",
     MACOS_ASSET: "SafeInstall.app/Contents/MacOS/SafeInstall",
 }
+_MACOS_INFO_MEMBER = "SafeInstall.app/Contents/Info.plist"
 _ALLOWED_ARCHIVE_ROOTS = {
     WINDOWS_ASSET: ("SafeInstall",),
     MACOS_ASSET: ("SafeInstall.app", "__MACOSX"),
@@ -55,6 +57,8 @@ _REQUIRED_SBOM_COMPONENTS = {
 _MAX_RELEASE_ZIP_MEMBERS = 200_000
 _MAX_RELEASE_ZIP_UNCOMPRESSED = 8 * 1024 * 1024 * 1024
 _MAX_CONSTRAINTS_BYTES = 256 * 1024
+_MAX_INFO_PLIST_BYTES = 1024 * 1024
+_MACHO_ARM64_CPU_TYPE = 0x0100000C
 RELEASE_CONSTRAINTS = Path("constraints/release-python311.txt")
 
 
@@ -64,6 +68,18 @@ def github_tag_for_version(version: str) -> str:
     if match is None:
         raise ReleaseValidationError(f"Unsupported alpha package version: {version!r}")
     return f"v{match.group('base')}-alpha.{match.group('serial')}"
+
+
+def macos_bundle_versions(version: str) -> tuple[str, str]:
+    """Return Apple-compatible marketing and build versions for an Alpha package."""
+    match = _ALPHA_VERSION.fullmatch(version)
+    if match is None:
+        raise ReleaseValidationError(f"Invalid macOS bundle version source: {version!r}")
+    short_version = match.group("base")
+    build_number = int(match.group("serial"))
+    if short_version == "0.0.0" or build_number < 1:
+        raise ReleaseValidationError(f"Invalid macOS bundle version source: {version!r}")
+    return short_version, str(build_number)
 
 
 def validate_project_version(root: Path, tag: str | None = None) -> str:
@@ -101,6 +117,84 @@ def _require_regular_file(path: Path) -> None:
         raise ReleaseValidationError(f"Release asset is empty: {path.name}")
 
 
+def _validate_macho_arm64_header(header: bytes) -> None:
+    if len(header) < 8:
+        raise ReleaseValidationError("macOS executable is not a complete arm64 Mach-O file")
+    if header[:4] == b"\xcf\xfa\xed\xfe":
+        cpu_type = int.from_bytes(header[4:8], "little")
+    elif header[:4] == b"\xfe\xed\xfa\xcf":
+        cpu_type = int.from_bytes(header[4:8], "big")
+    else:
+        raise ReleaseValidationError("macOS executable is not a thin 64-bit arm64 Mach-O file")
+    if cpu_type != _MACHO_ARM64_CPU_TYPE:
+        raise ReleaseValidationError("macOS executable architecture is not arm64")
+
+
+def _validate_macos_info(metadata: object, version: str) -> None:
+    if not isinstance(metadata, dict):
+        raise ReleaseValidationError("macOS Info.plist must contain a dictionary")
+    expected_short, expected_build = macos_bundle_versions(version)
+    expected = {
+        "CFBundleExecutable": "SafeInstall",
+        "CFBundleShortVersionString": expected_short,
+        "CFBundleVersion": expected_build,
+        "SafeInstallPackageVersion": version,
+    }
+    for key, expected_value in expected.items():
+        if metadata.get(key) != expected_value:
+            raise ReleaseValidationError(
+                f"macOS Info.plist {key} does not match the project version"
+            )
+
+
+def validate_macos_bundle(app: Path, version: str) -> None:
+    """Validate the executable and Apple version metadata in a built app bundle."""
+    app = Path(app)
+    if app.is_symlink() or not app.is_dir():
+        raise ReleaseValidationError(f"macOS app bundle is missing: {app}")
+    info_path = app / "Contents" / "Info.plist"
+    executable_path = app / "Contents" / "MacOS" / "SafeInstall"
+    _require_regular_file(info_path)
+    _require_regular_file(executable_path)
+    try:
+        with executable_path.open("rb") as handle:
+            _validate_macho_arm64_header(handle.read(8))
+    except OSError as error:
+        raise ReleaseValidationError("macOS executable cannot be read") from error
+    if info_path.stat().st_size > _MAX_INFO_PLIST_BYTES:
+        raise ReleaseValidationError("macOS Info.plist is unexpectedly large")
+    try:
+        with info_path.open("rb") as handle:
+            metadata = plistlib.load(handle)
+    except (OSError, plistlib.InvalidFileException) as error:
+        raise ReleaseValidationError("macOS Info.plist cannot be read") from error
+    _validate_macos_info(metadata, version)
+
+
+def _validate_macos_release_bundle(path: Path, version: str) -> None:
+    try:
+        with zipfile.ZipFile(path) as archive:
+            executable = archive.getinfo(_REQUIRED_ARCHIVE_MEMBERS[MACOS_ASSET])
+            info = archive.getinfo(_MACOS_INFO_MEMBER)
+            if (
+                info.is_dir()
+                or _zip_member_is_symlink(info)
+                or info.file_size > _MAX_INFO_PLIST_BYTES
+            ):
+                raise ReleaseValidationError("macOS release Info.plist is invalid")
+            with archive.open(executable) as handle:
+                _validate_macho_arm64_header(handle.read(8))
+            try:
+                metadata = plistlib.loads(archive.read(info))
+            except plistlib.InvalidFileException as error:
+                raise ReleaseValidationError("macOS release Info.plist cannot be read") from error
+            _validate_macos_info(metadata, version)
+    except (KeyError, OSError, RuntimeError, zipfile.BadZipFile) as error:
+        raise ReleaseValidationError(
+            "macOS release bundle metadata is missing or unreadable"
+        ) from error
+
+
 def _validate_release_zip(path: Path) -> None:
     _require_regular_file(path)
     try:
@@ -118,6 +212,10 @@ def _validate_release_zip(path: Path) -> None:
             seen: set[str] = set()
             for member in members:
                 parts = _safe_release_member_parts(member.filename, allowed_roots)
+                if any(_looks_like_openai_sdk_part(part) for part in parts):
+                    raise ReleaseValidationError(
+                        f"Release archive includes the optional OpenAI SDK: {path.name}"
+                    )
                 canonical = "/".join(
                     unicodedata.normalize("NFC", part).casefold() for part in parts
                 )
@@ -178,6 +276,13 @@ def _unsafe_windows_path_part(part: str) -> bool:
     if basename in {"con", "prn", "aux", "nul"}:
         return True
     return bool(re.fullmatch(r"(?:com|lpt)[1-9]", basename))
+
+
+def _looks_like_openai_sdk_part(part: str) -> bool:
+    normalized = part.casefold()
+    return normalized in {"openai", "openai.py"} or (
+        normalized.startswith("openai-") and normalized.endswith((".dist-info", ".data"))
+    )
 
 
 def _zip_member_is_symlink(member: zipfile.ZipInfo) -> bool:
@@ -402,6 +507,7 @@ def verify_release_assets(directory: Path, version: str, constraints_path: Path)
         )
     for name in ARCHIVE_ASSETS:
         _validate_release_zip(directory / name)
+    _validate_macos_release_bundle(directory / MACOS_ASSET, version)
     verify_checksums(directory)
     validate_sbom(directory / SBOM_ASSET, version, constraints_path)
 
@@ -463,6 +569,12 @@ def _build_parser() -> argparse.ArgumentParser:
     release.add_argument("--metadata", type=Path, required=True)
     release.add_argument("--tag", required=True)
     release.add_argument("--state", choices=("draft", "published"), required=True)
+
+    macos_bundle = commands.add_parser(
+        "validate-macos-bundle", help="validate a built arm64 app and its version metadata"
+    )
+    macos_bundle.add_argument("--root", type=Path, default=Path.cwd())
+    macos_bundle.add_argument("--app", type=Path, required=True)
     return parser
 
 
@@ -488,6 +600,10 @@ def main(argv: list[str] | None = None) -> int:
                 expected_draft=args.state == "draft",
             )
             print(f"Validated {args.state} GitHub prerelease metadata")
+        elif args.command == "validate-macos-bundle":
+            version = validate_project_version(args.root)
+            validate_macos_bundle(args.app, version)
+            print(f"Validated arm64 macOS bundle for SafeInstall {version}")
         else:  # pragma: no cover - argparse requires one of the commands
             parser.error("unknown command")
     except ReleaseValidationError as error:

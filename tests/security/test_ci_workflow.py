@@ -88,7 +88,14 @@ def test_release_workflow_smoke_scans_without_ai_and_checks_assets() -> None:
     assert "Remove-Item Env:OPENAI_API_KEY" in workflow
     assert "unset OPENAI_API_KEY" in workflow
     assert "SafeInstall-Windows-x64.zip" in workflow
-    assert "SafeInstall-macOS-unsigned.zip" in workflow
+    assert "SafeInstall-macOS-arm64-unsigned.zip" in workflow
+    assert "SafeInstall-macOS-unsigned.zip" not in workflow
+    assert "runs-on: macos-15" in workflow
+    assert "runs-on: macos-latest" not in workflow
+    assert "uname -m" in workflow
+    assert 'file "${APP_EXECUTABLE}"' in workflow
+    assert "lipo -archs" in workflow
+    assert "tools/release.py validate-macos-bundle" in workflow
     assert "SHA256SUMS.txt" in workflow
     assert "SBOM.json" in workflow
     assert "cyclonedx-bom==" in workflow
