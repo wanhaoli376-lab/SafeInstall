@@ -3,6 +3,10 @@
 SafeInstall v0.2.0-alpha.1 is a public testing release. Windows x64 is the recommended platform.
 You do not need Python, a terminal, an account, or an OpenAI API key.
 
+The experimental `SafeInstall-macOS-unsigned.zip` build is for Apple Silicon (arm64) only. It
+does not support Intel Macs, is not signed with an Apple Developer ID, and is not notarized;
+Gatekeeper may display a warning. Windows remains the recommended Alpha.1 test platform.
+
 ## Windows test
 
 1. Download `SafeInstall-Windows-x64.zip` from the GitHub Release.

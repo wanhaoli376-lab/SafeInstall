@@ -5,6 +5,20 @@ versioning after its first stable release.
 
 ## [Unreleased]
 
+### Preparing 0.2.0a2
+
+- Added a working private vulnerability-reporting route and clarified that ordinary bugs,
+  false positives, and feature requests remain public Issues.
+- Renamed the future macOS asset to `SafeInstall-macOS-arm64-unsigned.zip` and documented that
+  it supports Apple Silicon only, not Intel Macs.
+- Derived Apple bundle marketing/build versions from `pyproject.toml` and added Info.plist plus
+  arm64 Mach-O release validation.
+- Pinned the future macOS job to GitHub's `macos-15` arm64 runner and added `uname`, `file`, and
+  `lipo` build gates.
+- Added release-documentation and Issue Form label contract checks.
+
+This is a development version. No `v0.2.0-alpha.2` Tag or Release has been created.
+
 ## [0.2.0a1] - 2026-08-12
 
 ### Added

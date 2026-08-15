@@ -7,13 +7,13 @@ complete only when every required asset is present and independently verified.
 
 SafeInstall uses PEP 440 for the Python package and a reader-friendly Git tag:
 
-- Python package: `0.2.0a1`
-- Git tag and GitHub Release: `v0.2.0-alpha.1`
+- Python package: `0.2.0a2`
+- Git tag and GitHub Release: `v0.2.0-alpha.2`
 
 Run the checked-in validator before tagging:
 
 ```console
-python tools/release.py validate-version --root . --tag v0.2.0-alpha.1
+python tools/release.py validate-version --root . --tag v0.2.0-alpha.2
 ```
 
 ## Before tagging
@@ -51,8 +51,8 @@ in `pyproject.toml`. Updating a release pin requires dependency review and anoth
 Create an annotated tag on the reviewed commit and push only that tag:
 
 ```console
-git tag -a v0.2.0-alpha.1 -m "SafeInstall v0.2.0-alpha.1"
-git push origin v0.2.0-alpha.1
+git tag -a v0.2.0-alpha.2 -m "SafeInstall v0.2.0-alpha.2"
+git push origin v0.2.0-alpha.2
 ```
 
 The tag workflow then performs these gates:
@@ -60,7 +60,8 @@ The tag workflow then performs these gates:
 1. validate the tag/package/runtime version mapping;
 2. build the constrained Windows portable application;
 3. run Windows `--smoke-test` and non-AI folder/ZIP `--smoke-scan` checks;
-4. build and smoke-test the unsigned macOS application;
+4. build the unsigned Apple Silicon application on `macos-15`, verify runner and Mach-O arm64
+   architecture, validate Info.plist versions, and smoke-test the application;
 5. download both exact build artifacts into one metadata job;
 6. generate a CycloneDX SBOM from the constrained Python application dependency environment;
 7. calculate SHA-256 over the two final ZIP files;
@@ -75,7 +76,7 @@ Pull requests cannot trigger this workflow, and manual dispatch cannot publish.
 ## Required assets
 
 - `SafeInstall-Windows-x64.zip`
-- `SafeInstall-macOS-unsigned.zip`
+- `SafeInstall-macOS-arm64-unsigned.zip`
 - `SHA256SUMS.txt`
 - `SBOM.json`
 
@@ -103,7 +104,7 @@ asset.
 
    ```console
    python tools/release.py verify-assets --directory <download-directory> \
-     --root . --tag v0.2.0-alpha.1
+     --root . --tag v0.2.0-alpha.2
    ```
 
 6. Open the Windows ZIP and confirm `SafeInstall/SafeInstall.exe` exists.

@@ -13,10 +13,15 @@ SafeInstall's static-analysis security boundary.
 
 ## Reporting a vulnerability
 
-Please do not open a public issue, pull request, or discussion containing exploit details or a
-real secret. Use GitHub's private vulnerability reporting feature after the repository is
-published. If that feature is not yet available, contact the repository owner privately using
-the address listed on their GitHub profile.
+Use public [GitHub Issues](https://github.com/wanhaoli376-lab/SafeInstall/issues/new/choose) for
+ordinary bugs, false positives, and feature requests that do not disclose a vulnerability in
+SafeInstall itself. Remove secrets, private source code, identifying local paths, and unsafe
+payloads before posting.
+
+For an undisclosed security vulnerability in SafeInstall itself, use
+[GitHub Private Vulnerability Reporting](https://github.com/wanhaoli376-lab/SafeInstall/security/advisories/new).
+This creates a private advisory visible to the reporter and repository maintainers. Do not open a
+public issue, pull request, or discussion containing exploit details or a real secret.
 
 Include:
 
