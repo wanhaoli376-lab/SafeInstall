@@ -31,3 +31,16 @@ def test_false_positive_template_requires_version_language_and_sanitized_example
     assert {"version", "rule", "language", "evidence", "context"} <= ids
     assert "sanitized" in rendered
     assert "API keys" in rendered
+
+
+def test_all_issue_forms_reference_the_expected_repository_labels() -> None:
+    expected = {
+        "alpha_feedback.yml": "alpha-feedback",
+        "bug_report.yml": "bug",
+        "false_positive.yml": "false-positive",
+        "feature_request.yml": "enhancement",
+        "rule_request.yml": "rule-request",
+    }
+
+    for filename, label in expected.items():
+        assert _template(filename).get("labels") == [label]

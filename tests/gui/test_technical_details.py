@@ -45,3 +45,23 @@ def test_inferred_finding_is_labeled_as_inference(qtbot: object) -> None:
     assert view.fact_heading.text() == "Observed evidence"
     assert view.inference_heading.text() == "SafeInstall's assessment"
     assert view.advice_heading.text() == "Advice"
+
+
+def test_partial_technical_report_keeps_coverage_visible_when_language_changes(
+    tmp_path: Path, qtbot: object
+) -> None:
+    (tmp_path / "ok.py").write_text("# fixture\n", encoding="utf-8")
+    (tmp_path / "broken.sh").write_bytes(b"\x81fixture")
+    catalog = Catalog("en")
+    view = TechnicalDetailsView(catalog)
+    qtbot.addWidget(view)  # type: ignore[attr-defined]
+    view.set_report(scan_target(tmp_path))
+
+    assert not view.coverage_notice.isHidden()
+    assert "broken.sh" in view.coverage_notice.text()
+    assert "scanned files only" in view.score.text().lower()
+
+    catalog.switch("zh_CN")
+    view.retranslate()
+    assert "扫描不完整" in view.score.text()
+    assert "无法按受支持的 UTF-8" in view.coverage_notice.text()

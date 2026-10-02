@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "safeinstall"
-version = "0.2.0a1"
+version = "0.2.0a2"
 description = "Understand software before you run it."
 readme = "README.md"
 requires-python = ">=3.11"

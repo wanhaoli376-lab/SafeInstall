@@ -8,6 +8,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
+from safeinstall.constants import SKIP_REASON_LABELS
 from safeinstall.models import Capability, FindingConfidence, ScanReport
 from safeinstall.redaction import redact_text
 from safeinstall.report.common import (
@@ -29,7 +30,25 @@ def render_terminal(report: ScanReport, *, console: Console | None = None) -> No
     heading.append(f"{redact_text(report.target.display_name)}\n")
     heading.append("Static analysis only — target code was not executed.", style="dim")
     output.print(Panel(heading, border_style="blue"))
-    output.print("Overall Risk: ", risk, f"  Score: {report.risk.score}/100")
+    partial = report.coverage.status == "partial"
+    if partial:
+        coverage_lines = [
+            f"{report.target.files_scanned} files scanned; "
+            f"{report.coverage.skipped_count} paths skipped. Score covers scanned files only."
+        ]
+        coverage_lines.extend(
+            f"{redact_text(item.path)}: {SKIP_REASON_LABELS[item.reason]}"
+            for item in report.coverage.skipped_paths
+        )
+        if report.coverage.skipped_count > len(report.coverage.skipped_paths):
+            coverage_lines.append(
+                f"Showing the first {len(report.coverage.skipped_paths)} skipped paths."
+            )
+        output.print(
+            Panel(Text("\n".join(coverage_lines)), title="Scan incomplete", border_style="yellow")
+        )
+    label = "Observed Risk (scanned files only): " if partial else "Overall Risk: "
+    output.print(label, risk, f"  Score: {report.risk.score}/100")
     output.print()
 
     output.print("[bold]What this software may do[/bold]")
@@ -37,7 +56,10 @@ def render_terminal(report: ScanReport, *, console: Console | None = None) -> No
         for capability in report.risk.capabilities.observed:
             output.print(f"  [yellow]⚠[/yellow] {escape(CAPABILITY_LABELS[capability])}")
     else:
-        output.print("  No supported high-impact capability was observed.", style="green")
+        output.print(
+            "  No supported high-impact capability was observed in the scanned files.",
+            style="yellow" if partial else "green",
+        )
 
     output.print()
     output.print("[bold]Why this matters[/bold]")
@@ -58,7 +80,9 @@ def render_terminal(report: ScanReport, *, console: Console | None = None) -> No
         observed = report.risk.capabilities.enabled(capability)
         capabilities.add_row(
             CAPABILITY_LABELS[capability],
-            "[bold red]YES[/bold red]" if observed else "[dim]NO[/dim]",
+            "[bold red]YES[/bold red]"
+            if observed
+            else ("[yellow]UNKNOWN[/yellow]" if partial else "[dim]NO[/dim]"),
         )
     output.print(capabilities)
 
@@ -89,7 +113,12 @@ def render_terminal(report: ScanReport, *, console: Console | None = None) -> No
                 "are available with --format json.[/dim]"
             )
     else:
-        output.print(Panel("No supported risk pattern was found.", title="Technical Details"))
+        output.print(
+            Panel(
+                "No supported risk pattern was found in the scanned files.",
+                title="Technical Details",
+            )
+        )
 
     if report.dependencies:
         dependency_table = Table(title="Dependencies")

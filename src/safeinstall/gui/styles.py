@@ -52,7 +52,7 @@ QFrame#RiskCard {
     border-radius: 8px;
     padding: 16px;
 }
-QFrame#RiskCard[risk="medium"] {
+QFrame#RiskCard[risk="medium"], QFrame#RiskCard[risk="incomplete"] {
     background: #fff8e6;
     border-left-color: #b7791f;
 }
@@ -75,6 +75,13 @@ QLabel#SectionTitle {
 }
 QLabel#PositiveChecks {
     color: #276749;
+}
+QLabel#CoverageNotice {
+    background: #fff8e6;
+    color: #704a0d;
+    border: 1px solid #e4c681;
+    border-radius: 8px;
+    padding: 14px;
 }
 QLabel#Recommendation {
     background: #f6f8fa;

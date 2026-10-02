@@ -50,3 +50,8 @@ def test_spec_creates_macos_app_bundle_only_on_macos() -> None:
     assert 'name="SafeInstall.app"' in spec
     assert 'bundle_identifier="io.github.wanhaoli376-lab.safeinstall"' in spec
     assert "codesign_identity=None" in spec
+    assert "validate_project_version(project_root)" in spec
+    assert "macos_bundle_versions(package_version)" in spec
+    assert '"CFBundleShortVersionString": bundle_short_version' in spec
+    assert '"CFBundleVersion": bundle_build_version' in spec
+    assert '"SafeInstallPackageVersion": package_version' in spec

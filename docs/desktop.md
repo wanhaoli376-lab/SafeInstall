@@ -55,10 +55,21 @@ PyInstaller must build separately on macOS; it is not a cross-compiler. On macOS
 adds `dist/SafeInstall.app` with bundle identifier
 `io.github.wanhaoli376-lab.safeinstall`.
 
-The current macOS development artifact is **not signed with an Apple Developer ID and is not
-notarized**. PyInstaller may apply ad-hoc signing required by the local toolchain, but users can
-still receive a Gatekeeper warning. Do not describe the artifact as signed or notarized until a
-reviewed signing workflow exists.
+The Alpha.2 release contract produces an **Apple Silicon (arm64) only** app and does not support
+Intel Macs. The workflow uses GitHub's explicit `macos-15` arm64 runner, requires `uname -m` and
+`lipo -archs` to report only `arm64`, prints the executable type with `file`, and runs the checked-in
+bundle validator before packaging.
+
+The PyInstaller spec reads the package version from `pyproject.toml`. For `0.2.0a2`, it writes
+Apple-compatible `CFBundleShortVersionString=0.2.0`, `CFBundleVersion=2`, and the full
+`SafeInstallPackageVersion=0.2.0a2`; the application About page continues to use the package's
+full `__version__` value. Both the built app and final ZIP are rejected when these values are
+empty, `0.0.0`, stale, or unrelated to the project version.
+
+The macOS development artifact is **not signed with an Apple Developer ID and is not notarized**.
+PyInstaller may apply ad-hoc signing required by the local toolchain, but users can still receive
+a Gatekeeper warning. Do not describe the artifact as signed or notarized until a reviewed signing
+workflow exists.
 
 ## GitHub Alpha Release
 
@@ -74,7 +85,7 @@ not a binary- or OS-component inventory. The workflow creates a private draft an
 server-side files, then exposes the draft as a prerelease. The stable assets are:
 
 - `SafeInstall-Windows-x64.zip`
-- `SafeInstall-macOS-unsigned.zip`
+- `SafeInstall-macOS-arm64-unsigned.zip`
 - `SHA256SUMS.txt`
 - `SBOM.json`
 

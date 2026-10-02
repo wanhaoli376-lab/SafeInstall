@@ -20,7 +20,7 @@ def test_export_reuses_json_and_markdown_renderers(tmp_path: Path) -> None:
     export_report(report, json_path, ReportFormat.JSON)
     export_report(report, markdown_path, ReportFormat.MARKDOWN)
 
-    assert '"schema_version": "1.0"' in json_path.read_text(encoding="utf-8")
+    assert '"schema_version": "1.1"' in json_path.read_text(encoding="utf-8")
     assert "# SafeInstall Report" in markdown_path.read_text(encoding="utf-8")
     assert "SI-PY-001" in markdown_path.read_text(encoding="utf-8")
 

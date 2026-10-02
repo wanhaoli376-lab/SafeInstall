@@ -5,6 +5,28 @@ versioning after its first stable release.
 
 ## [Unreleased]
 
+### Preparing 0.2.0a2
+
+- Fixed silently skipped oversized, undecodable, or unreadable source files producing a
+  misleading ordinary zero-score result. Targets without readable supported sources now fail;
+  partial scans retain findings and explicitly identify bounded skipped-path details.
+- Added JSON schema 1.1 coverage metadata, CLI exit status 3 for partial reports, and English /
+  Simplified Chinese coverage notices in desktop results and technical details. Coverage is
+  separate from the evidence-based risk score; incomplete scans no longer show a green low-risk
+  verdict or definitive negative capability checks.
+- Kept skipped paths redacted and escaped at report boundaries, including Markdown table separators.
+- Added a working private vulnerability-reporting route and clarified that ordinary bugs,
+  false positives, and feature requests remain public Issues.
+- Renamed the future macOS asset to `SafeInstall-macOS-arm64-unsigned.zip` and documented that
+  it supports Apple Silicon only, not Intel Macs.
+- Derived Apple bundle marketing/build versions from `pyproject.toml` and added Info.plist plus
+  arm64 Mach-O release validation.
+- Pinned the future macOS job to GitHub's `macos-15` arm64 runner and added `uname`, `file`, and
+  `lipo` build gates.
+- Added release-documentation and Issue Form label contract checks.
+
+This is a development version. No `v0.2.0-alpha.2` Tag or Release has been created.
+
 ## [0.2.0a1] - 2026-08-12
 
 ### Added

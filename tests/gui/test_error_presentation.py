@@ -2,7 +2,12 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-from safeinstall.exceptions import InputError, RepositoryLoadError, UnsafeArchiveError
+from safeinstall.exceptions import (
+    InputError,
+    NoScannableFilesError,
+    RepositoryLoadError,
+    UnsafeArchiveError,
+)
 from safeinstall.gui.error_presentation import present_error
 from safeinstall.gui.i18n import Catalog
 
@@ -39,3 +44,14 @@ def test_error_detail_is_redacted() -> None:
 
     assert secret not in result.technical_detail
     assert "sk-****...3456" in result.technical_detail
+
+
+def test_zero_file_scan_is_explained_in_both_languages() -> None:
+    error = NoScannableFilesError("No supported text files could be scanned.")
+
+    english = present_error(error, Catalog("en"))
+    chinese = present_error(error, Catalog("zh_CN"))
+
+    assert english.title == "No files could be scanned"
+    assert chinese.title == "没有可扫描的文件"
+    assert "编码" in chinese.message

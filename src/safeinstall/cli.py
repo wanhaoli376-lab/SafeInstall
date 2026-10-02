@@ -74,6 +74,8 @@ def scan(
         typer.echo(render_markdown(report))
     else:
         render_terminal(report)
+    if report.coverage.status == "partial":
+        raise typer.Exit(code=3)
 
 
 def _configure_utf8_output() -> None:

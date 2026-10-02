@@ -17,6 +17,9 @@ SafeInstall 默认在本地做静态分析：不安装目标依赖，不导入�
 
 **SafeInstall v0.2.0-alpha.1 是面向公开测试的预发布版本，当前优先推荐 Windows x64。**
 
+当前公开版本：v0.2.0-alpha.1。`main` 正在准备 0.2.0a2，但 Alpha.2 Tag 和 Release 尚不存在；请以
+[Releases 列表页](https://github.com/wanhaoli376-lab/SafeInstall/releases)实际显示的版本为准。
+
 ### Windows x64
 
 前往 [v0.2.0-alpha.1 Release 页面](https://github.com/wanhaoli376-lab/SafeInstall/releases/tag/v0.2.0-alpha.1)
@@ -26,7 +29,7 @@ SafeInstall 默认在本地做静态分析：不安装目标依赖，不导入�
 
 ### macOS（实验性）
 
-Release 页面同时提供 `SafeInstall-macOS-unsigned.zip`。这个开发构建尚未签名，也没有经过 Apple Notarization，macOS Gatekeeper 可能显示警告。本次 Alpha 仍以 Windows 为优先测试平台。
+当前 Alpha.1 Release 页面同时提供 `SafeInstall-macOS-unsigned.zip`。这个实验构建仅支持 **Apple Silicon（arm64）**，不支持 Intel Mac；它没有使用 Apple Developer ID 签名，也没有经过 notarize，因此 macOS Gatekeeper 可能显示警告。本次 Alpha 仍以 Windows 为优先测试平台。从计划中的 Alpha.2 开始，明确架构的资产名将改为 `SafeInstall-macOS-arm64-unsigned.zip`。
 
 可以使用 Release 中的 `SHA256SUMS.txt` 校验下载文件；`SBOM.json` 是发布元数据任务基于固定依赖生成的 Python 应用依赖 CycloneDX 清单，并不是两个平台 portable 二进制或操作系统组件的完整清单。
 
@@ -161,11 +164,13 @@ safeinstall scan ./examples/risky-project
 | 已支持 | Python、Shell、PowerShell、Batch、JavaScript/Node.js |
 | 已支持 | Python/npm Manifest、Lockfile、安装脚本、Dockerfile、GitHub Actions |
 | 已支持 | Skill、Plugin Manifest、MCP 配置/Server、Prompt 类 Markdown |
-| 实验性 | 桌面 GUI、未签名的 Windows/macOS Alpha 构建、外部 YAML 规则、可信的进程内 Scanner Plugin、可选 AI 摘要 |
+| 实验性 | 桌面 GUI、未签名的 Windows 与仅支持 Apple Silicon 的 macOS Alpha 构建、外部 YAML 规则、可信的进程内 Scanner Plugin、可选 AI 摘要 |
 | 计划中 | `.exe`、`.msi`、`.dmg`、`.pkg` 深度分析，以及 Go、Rust、APK、Office Macro |
 | 计划中 | 隔离执行沙箱、签名与 notarize 后的安装包、更新检查和二进制分析 |
 
-不支持或无法识别的内容可能会被跳过。报告没有发现风险，只代表在当前支持范围和资源限制内没有命中规则，并不能证明目标安全。
+受支持的文件如果过大、无法解码或读取失败，会记录为跳过。部分扫描会明确显示“扫描不完整”，并保留已发现的风险，不再给出整个项目“低风险”的印象。如果没有任何可读取的受支持文本，扫描会直接报错，不生成零分报告。
+
+JSON Schema 1.1 新增 `coverage.status`、准确的 `coverage.skipped_count`，以及最多 100 个脱敏的相对路径和跳过原因。命令行退出码：`0` 表示扫描完成，`2` 表示失败，`3` 表示已输出部分扫描报告；`0` 不代表没有风险。未支持的格式和配置中排除的依赖、构建目录仍不属于扫描范围。报告没有发现风险，只说明已扫描的文件未命中受支持的规则。
 
 桌面应用会直接拒绝已知不支持的安装包与二进制格式，不会误导用户说“已经分析 EXE”。架构为未来的 `BinaryScanner` 预留边界，但当前不会放置空实现。
 

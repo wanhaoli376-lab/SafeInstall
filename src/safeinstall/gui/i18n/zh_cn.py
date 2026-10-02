@@ -52,6 +52,7 @@ STRINGS = {
     ),
     "common.yes": "是",
     "common.no": "否",
+    "common.unknown": "未知（扫描不完整）",
     "common.back": "← 返回",
     "common.none": "无",
     "risk.low": "低风险",
@@ -73,6 +74,29 @@ STRINGS = {
     "result.technical": "查看技术详情",
     "result.export": "导出报告",
     "result.no_findings": "未发现受支持的风险模式。",
+    "result.partial_no_findings": "在已扫描的文件中未发现受支持的风险模式。",
+    "result.partial_no_capability": "在已扫描的文件中未发现受支持的高影响能力",
+    "coverage.incomplete": "扫描不完整",
+    "coverage.caption": "扫描情况",
+    "coverage.observed_risk": "已扫描部分：{risk}",
+    "coverage.summary": "已扫描 {scanned} 个文件，跳过 {count} 个路径。被跳过的内容尚未分析。",
+    "coverage.omitted": "显示 {count} 个跳过路径中的 {shown} 个；明细记录数量有上限。",
+    "coverage.reason.file_too_large": "超过单个文件的扫描大小上限",
+    "coverage.reason.undecodable_text": "无法按受支持的 UTF-8 或 UTF-16 文本解码",
+    "coverage.reason.unreadable": "无法读取该文件或目录",
+    "coverage.reason.unsafe_path": "链接、重解析点或扫描根目录之外的路径",
+    "coverage.advice": (
+        "请先检查跳过的路径，解决读取或大小限制后再依据报告作判断。"
+        "部分文件未发现风险，不能说明整个项目风险低。"
+    ),
+    "coverage.why": (
+        "部分受支持的路径未能检查。当前结果仅针对已扫描的文件，跳过的内容可能包含其他风险。"
+    ),
+    "error.no_sources.title": "没有可扫描的文件",
+    "error.no_sources.message": (
+        "未能分析任何受支持的文本文件。目标可能为空、过大、无法读取，"
+        "或使用了不支持的格式或编码。请查看详细原因，选择可读取的源文件。"
+    ),
     "result.no_high_impact_capability": "未发现受支持的高影响能力",
     "result.no_persistence": "未发现受支持的持久化模式",
     "result.no_secret_pattern": "未发现受支持的硬编码 Secret 模式",
@@ -153,6 +177,7 @@ STRINGS = {
     "result.ai_prompts": "{count} 个 Prompt 文件",
     "result.ai_model": "模型：{model}",
     "technical.title": "技术详情",
+    "technical.partial_score": "仅已扫描文件：{level} · 分数 {score}/100（扫描不完整）",
     "technical.score": "风险引擎结果：{level} · 分数 {score}/100",
     "technical.omitted": "界面为避免资源占用省略了另外 {count} 条发现；请导出 JSON 查看完整报告。",
     "technical.rule": "规则 ID",

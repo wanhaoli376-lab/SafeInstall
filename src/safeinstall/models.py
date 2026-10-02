@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+
+MAX_RECORDED_SKIPS = 100
 
 RuleId = Annotated[
     str,
@@ -185,15 +187,52 @@ class TargetSummary(BaseModel):
     metadata: dict[str, str] = Field(default_factory=dict)
 
 
+class SkipReason(StrEnum):
+    """Stable reasons why a supported path could not be inspected."""
+
+    FILE_TOO_LARGE = "file_too_large"
+    UNDECODABLE_TEXT = "undecodable_text"
+    UNREADABLE = "unreadable"
+    UNSAFE_PATH = "unsafe_path"
+
+
+class SkippedPath(BaseModel):
+    """A relative file or directory omitted from supported-source analysis."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    path: str = Field(min_length=1, max_length=4096)
+    reason: SkipReason
+
+
+class ScanCoverage(BaseModel):
+    """Coverage of supported paths outside configured directory exclusions."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    status: Literal["complete", "partial"] = "complete"
+    skipped_count: int = Field(default=0, ge=0)
+    skipped_paths: tuple[SkippedPath, ...] = Field(default=(), max_length=MAX_RECORDED_SKIPS)
+
+    @model_validator(mode="after")
+    def consistent_status(self) -> Self:
+        if (self.status == "partial") != (self.skipped_count > 0):
+            raise ValueError("Coverage status must agree with the skipped path count.")
+        if len(self.skipped_paths) != min(self.skipped_count, MAX_RECORDED_SKIPS):
+            raise ValueError("Coverage must include bounded details for skipped paths.")
+        return self
+
+
 class ScanReport(BaseModel):
     """Complete, serializable result returned by the public scan interface."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    schema_version: str = "1.0"
+    schema_version: str = "1.1"
     safeinstall_version: str
     target: TargetSummary
     risk: RiskAssessment
+    coverage: ScanCoverage = Field(default_factory=ScanCoverage)
     findings: tuple[Finding, ...] = ()
     dependencies: tuple[DependencyRecord, ...] = ()
     ai_analysis: AIAnalysisResult | None = None

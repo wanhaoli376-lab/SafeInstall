@@ -54,6 +54,7 @@ STRINGS = {
     ),
     "common.yes": "YES",
     "common.no": "NO",
+    "common.unknown": "UNKNOWN (scan incomplete)",
     "common.back": "← Back",
     "common.none": "None",
     "risk.low": "Low risk",
@@ -75,6 +76,35 @@ STRINGS = {
     "result.technical": "Technical Details",
     "result.export": "Export Report",
     "result.no_findings": "No supported risk pattern was found.",
+    "result.partial_no_findings": "No supported risk pattern was found in the scanned files.",
+    "result.partial_no_capability": (
+        "No supported high-impact capability was observed in the scanned files"
+    ),
+    "coverage.incomplete": "Scan incomplete",
+    "coverage.caption": "Scan coverage",
+    "coverage.observed_risk": "Scanned files: {risk}",
+    "coverage.summary": (
+        "Scanned {scanned} files; skipped {count} paths. Skipped content was not analyzed."
+    ),
+    "coverage.omitted": "Showing {shown} of {count} skipped paths; recorded details are bounded.",
+    "coverage.reason.file_too_large": "Exceeds the per-file scan size limit",
+    "coverage.reason.undecodable_text": "Not supported UTF-8 or UTF-16 text",
+    "coverage.reason.unreadable": "Could not read this file or directory",
+    "coverage.reason.unsafe_path": "Link, reparse point, or path outside the scan root",
+    "coverage.advice": (
+        "Review the skipped paths and resolve reading or size limitations before relying on this "
+        "report. A quiet partial result does not establish low overall risk."
+    ),
+    "coverage.why": (
+        "Some supported paths could not be inspected. Findings describe scanned files only; "
+        "skipped content may contain additional risks."
+    ),
+    "error.no_sources.title": "No files could be scanned",
+    "error.no_sources.message": (
+        "No supported text file could be analyzed. The target may be empty, too large, unreadable, "
+        "or use an unsupported format or encoding. Check the details and select readable "
+        "source files."
+    ),
     "result.no_high_impact_capability": "No supported high-impact capability was observed",
     "result.no_persistence": "No supported persistence pattern was found",
     "result.no_secret_pattern": "No supported hard-coded secret pattern was found",
@@ -175,6 +205,7 @@ STRINGS = {
     "result.ai_prompts": "{count} prompt files",
     "result.ai_model": "Model: {model}",
     "technical.title": "Technical Details",
+    "technical.partial_score": "Scanned files only: {level} · score {score}/100 (scan incomplete)",
     "technical.score": "Engine result: {level} · score {score}/100",
     "technical.omitted": (
         "{count} additional findings are omitted from this bounded UI view. Export JSON to review "

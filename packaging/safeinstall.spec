@@ -8,6 +8,13 @@ from PyInstaller.utils.hooks import collect_data_files
 
 project_root = Path(SPEC).resolve().parent.parent
 source_root = project_root / "src"
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
+from tools.release import macos_bundle_versions, validate_project_version
+
+package_version = validate_project_version(project_root)
+bundle_short_version, bundle_build_version = macos_bundle_versions(package_version)
 rule_data = collect_data_files(
     "safeinstall.rules.builtin",
     includes=["*.yml"],
@@ -61,5 +68,10 @@ if sys.platform == "darwin":
         name="SafeInstall.app",
         icon=None,
         bundle_identifier="io.github.wanhaoli376-lab.safeinstall",
-        info_plist={"NSHighResolutionCapable": True},
+        info_plist={
+            "CFBundleShortVersionString": bundle_short_version,
+            "CFBundleVersion": bundle_build_version,
+            "SafeInstallPackageVersion": package_version,
+            "NSHighResolutionCapable": True,
+        },
     )

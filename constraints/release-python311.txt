@@ -1,4 +1,4 @@
-# SafeInstall v0.2.0-alpha.1 release constraints for CPython 3.11.
+# SafeInstall v0.2.0-alpha.2 release constraints for CPython 3.11.
 #
 # Development dependencies intentionally keep compatible ranges in pyproject.toml.
 # Release jobs install through this file to constrain the application runtime,
