@@ -59,3 +59,25 @@ def test_missing_target_is_a_concise_user_error(tmp_path: Path) -> None:
     assert result.exit_code == 2
     assert "SafeInstall error:" in result.stderr
     assert "Traceback" not in result.stderr
+
+
+def test_unscannable_script_fails_instead_of_returning_a_zero_score(tmp_path: Path) -> None:
+    script = tmp_path / "broken.sh"
+    script.write_bytes(b"\x81fixture")
+
+    result = runner.invoke(app, ["scan", str(script), "--format", "json"])
+
+    assert result.exit_code == 2
+    assert not result.stdout
+    assert "No supported text files could be scanned" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+def test_partial_json_report_is_emitted_with_a_distinct_failure_status(tmp_path: Path) -> None:
+    (tmp_path / "ok.py").write_text("# fixture\n", encoding="utf-8")
+    (tmp_path / "broken.sh").write_bytes(b"\x81fixture")
+
+    result = runner.invoke(app, ["scan", str(tmp_path), "--format", "json"])
+
+    assert result.exit_code == 3
+    assert json.loads(result.stdout)["coverage"]["status"] == "partial"

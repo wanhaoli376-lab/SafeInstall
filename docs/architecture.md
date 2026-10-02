@@ -45,10 +45,24 @@ optional `AIAnalysisResult`.
 The JSON schema is versioned independently as `ScanReport.schema_version`. Public model and
 plugin stability is not promised before v1.0.
 
+Schema 1.1 adds `coverage`: `status` (`complete` or `partial`), the exact `skipped_count`, and up
+to 100 `skipped_paths` with relative, redacted `path` and stable `reason` values. Reasons are
+`file_too_large`, `undecodable_text`, `unreadable`, and `unsafe_path`. Directory traversal failures
+and pruned links are represented as paths too; this count does not claim to count files inside
+an unreadable directory. A larger count than the recorded list means the detail cap was reached.
+
+Coverage concerns supported text formats outside the configured exclusions, not all bytes in
+the project. Unsupported formats and ignored dependency/build directories remain outside scope.
+The risk score is still based on observed findings, so consumers must check coverage before
+interpreting it as a project-wide result. CLI status 0 means analysis completed (regardless of
+risk level), 2 means loading/analysis failed, and 3 means a partial report was emitted.
+
 ## Target lifecycle
 
 1. Select exactly one loader from the input form.
 2. Materialize the target inside a loader context and discover bounded source content.
+   Discovery also records bounded skip diagnostics. If no supported source was read, raise
+   `NoScannableFilesError` before scanners, plugins, or optional AI run; do not create a report.
 3. Exit the loader context, which removes temporary clones/extractions.
 4. Run local scanners and explicitly supplied plugins over in-memory `SourceFile` values.
 5. Calculate local risk. This result exists whether or not AI is enabled.

@@ -4,6 +4,11 @@ from __future__ import annotations
 
 from safeinstall.models import Capability, ScanReport, Severity
 
+INCOMPLETE_ADVICE = (
+    "This scan is incomplete. Review the skipped paths and resolve the reading or size "
+    "limitations before relying on the result. The score covers scanned files only."
+)
+
 CAPABILITY_LABELS = {
     Capability.FILESYSTEM_READ: "Read files",
     Capability.FILESYSTEM_WRITE: "Write or modify files",
@@ -29,6 +34,15 @@ SEVERITY_STYLE = {
 
 
 def recommendation_for(report: ScanReport) -> str:
+    advice = _risk_recommendation(report)
+    if report.coverage.status == "partial":
+        if report.risk.level in {Severity.INFO, Severity.LOW}:
+            return INCOMPLETE_ADVICE
+        return f"{INCOMPLETE_ADVICE} {advice}"
+    return advice
+
+
+def _risk_recommendation(report: ScanReport) -> str:
     level = report.risk.level
     if level is Severity.CRITICAL:
         return (
@@ -56,6 +70,11 @@ def recommendation_for(report: ScanReport) -> str:
 
 
 def why_this_matters(report: ScanReport) -> str:
+    if report.coverage.status == "partial":
+        return (
+            "Some supported paths could not be inspected. Findings describe only the files "
+            "that were scanned; skipped content may contain additional risks."
+        )
     capabilities = set(report.risk.capabilities.observed)
     if Capability.DOWNLOAD_EXECUTE in capabilities:
         return (

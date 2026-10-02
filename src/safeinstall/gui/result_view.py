@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
 
 from safeinstall.gui.i18n import Catalog
 from safeinstall.gui.presentation import ResultPresentation, present_report
-from safeinstall.models import ScanReport
+from safeinstall.models import ScanReport, Severity
 
 
 class ResultView(QWidget):
@@ -46,6 +46,11 @@ class ResultView(QWidget):
         self.risk_label.setObjectName("RiskLevel")
         risk_layout.addWidget(self.risk_caption)
         risk_layout.addWidget(self.risk_label)
+        self.coverage_notice = QLabel()
+        self.coverage_notice.setObjectName("CoverageNotice")
+        self.coverage_notice.setTextFormat(Qt.TextFormat.PlainText)
+        self.coverage_notice.setWordWrap(True)
+        self.coverage_notice.hide()
 
         self.behavior_title = QLabel()
         self.behavior_title.setObjectName("SectionTitle")
@@ -140,6 +145,7 @@ class ResultView(QWidget):
         layout.addWidget(self.back_button, alignment=Qt.AlignmentFlag.AlignLeft)
         layout.addWidget(self.target_name)
         layout.addWidget(self.risk_card)
+        layout.addWidget(self.coverage_notice)
         layout.addWidget(self.behavior_title)
         layout.addWidget(self.behaviors)
         layout.addWidget(self.checks)
@@ -175,7 +181,16 @@ class ResultView(QWidget):
         value = self.presentation
         self.target_name.setText(value.target_name)
         self.risk_label.setText(value.risk_label)
-        self.risk_card.setProperty("risk", value.risk_level.value)
+        partial = report.coverage.status == "partial"
+        self.risk_caption.setText(
+            self.catalog.text("coverage.caption" if partial else "result.overall_risk")
+        )
+        card_level = value.risk_level.value
+        if partial and value.risk_level is Severity.LOW:
+            card_level = "incomplete"
+        self.risk_card.setProperty("risk", card_level)
+        self.coverage_notice.setText(value.coverage_notice)
+        self.coverage_notice.setVisible(partial)
         self.risk_card.style().unpolish(self.risk_card)
         self.risk_card.style().polish(self.risk_card)
         self.behaviors.setText("\n".join(f"⚠ {item}" for item in value.behaviors))
@@ -206,10 +221,19 @@ class ResultView(QWidget):
 
     def _fill_findings(self, value: ResultPresentation) -> None:
         self.finding_table.setRowCount(max(1, len(value.top_findings)))
+        self.finding_table.clearSpans()
         if not value.top_findings:
             self.finding_table.setSpan(0, 0, 1, 3)
             self.finding_table.setItem(
-                0, 0, QTableWidgetItem(self.catalog.text("result.no_findings"))
+                0,
+                0,
+                QTableWidgetItem(
+                    self.catalog.text(
+                        "result.partial_no_findings"
+                        if value.coverage_notice
+                        else "result.no_findings"
+                    )
+                ),
             )
         else:
             for row, finding in enumerate(value.top_findings):

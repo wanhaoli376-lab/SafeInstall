@@ -5,6 +5,7 @@ from __future__ import annotations
 import html
 import re
 
+from safeinstall.constants import SKIP_REASON_LABELS
 from safeinstall.models import Capability, FindingConfidence, ScanReport
 from safeinstall.redaction import redact_text
 from safeinstall.report.common import (
@@ -20,6 +21,7 @@ MAX_MARKDOWN_DEPENDENCIES = 500
 
 
 def render_markdown(report: ScanReport) -> str:
+    partial = report.coverage.status == "partial"
     lines = [
         "# SafeInstall Report",
         "",
@@ -29,18 +31,41 @@ def render_markdown(report: ScanReport) -> str:
         f"**Scan time:** {_code(report.target.scan_started_at.isoformat())}  ",
         "**Analysis mode:** Static analysis; target code was not executed.",
         "",
-        "## Overall Risk",
-        "",
-        f"**{report.risk.level.value.upper()}** (score {report.risk.score}/100)",
-        "",
-        "## What this software may do",
-        "",
     ]
+    if partial:
+        lines.extend(
+            [
+                "## Scan incomplete",
+                "",
+                f"{report.coverage.skipped_count} paths were skipped. "
+                "The score covers scanned files only.",
+                "",
+                "| Skipped path | Reason |",
+                "|---|---|",
+            ]
+        )
+        lines.extend(
+            f"| {_code(item.path)} | {_plain(SKIP_REASON_LABELS[item.reason])} |"
+            for item in report.coverage.skipped_paths
+        )
+        if report.coverage.skipped_count > len(report.coverage.skipped_paths):
+            lines.append(f"\nShowing the first {len(report.coverage.skipped_paths)} skipped paths.")
+    lines.extend(
+        [
+            "",
+            "## Observed Risk (scanned files only)" if partial else "## Overall Risk",
+            "",
+            f"**{report.risk.level.value.upper()}** (score {report.risk.score}/100)",
+            "",
+            "## What this software may do",
+            "",
+        ]
+    )
     enabled = report.risk.capabilities.observed
     if enabled:
         lines.extend(f"- ⚠️ {CAPABILITY_LABELS[item]}" for item in enabled)
     else:
-        lines.append("- No supported high-impact capability was observed.")
+        lines.append("- No supported high-impact capability was observed in the scanned files.")
 
     lines.extend(["", "## Why this matters", "", why_this_matters(report)])
     if report.risk.primary_reasons:
@@ -64,13 +89,13 @@ def render_markdown(report: ScanReport) -> str:
     )
     lines.extend(
         f"| {_table(CAPABILITY_LABELS[item])} | "
-        f"{'YES' if report.risk.capabilities.enabled(item) else 'NO'} |"
+        f"{'YES' if report.risk.capabilities.enabled(item) else ('UNKNOWN' if partial else 'NO')} |"
         for item in Capability
     )
 
     lines.extend(["", "## Technical Details", ""])
     if not report.findings:
-        lines.append("No supported risk pattern was found.")
+        lines.append("No supported risk pattern was found in the scanned files.")
     else:
         shown_findings = report.findings[:MAX_MARKDOWN_FINDINGS]
         lines.extend(
@@ -178,7 +203,8 @@ def _table(value: str) -> str:
 
 def _code(value: str) -> str:
     clean = redact_text(value).replace("\r", " ").replace("\n", " ")
-    return f"<code>{html.escape(clean, quote=False)}</code>"
+    escaped = html.escape(clean, quote=False).replace("|", "&#124;")
+    return f"<code>{escaped}</code>"
 
 
 def _plain(value: str) -> str:

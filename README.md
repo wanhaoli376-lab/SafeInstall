@@ -200,8 +200,16 @@ rather than a destructive command or working payload.
 | Planned | Deep binary formats (`.exe`, `.msi`, `.dmg`, `.pkg`), Go, Rust, APK, Office macros |
 | Planned | Isolated execution sandbox, signed/notarized installers, automatic update checks, and binary analysis |
 
-Unsupported or unrecognized content may be skipped. A clean report means that no supported
-pattern was found; it does not prove safety.
+Supported files that exceed the size limit, cannot be decoded, or cannot be read are now listed
+as skipped. A partial scan is explicitly marked **Scan incomplete**, with its observed risks
+preserved; it is not an overall low-risk verdict. A target with no readable supported text fails
+without producing a zero-score report.
+
+JSON schema 1.1 includes `coverage.status`, the exact `coverage.skipped_count`, and up to 100
+redacted relative paths with skip reasons. The CLI returns 0 for a completed scan, 2 for an error,
+and 3 after emitting a partial report. Exit status 0 does not mean that no risks were found.
+Unsupported formats and configured dependency/build exclusions remain outside coverage. A report
+with no findings means only that no supported pattern was found in the scanned files.
 
 The desktop app rejects known unsupported installer/binary formats instead of claiming they were
 analyzed. A future `BinaryScanner` boundary is documented, but no empty or misleading binary

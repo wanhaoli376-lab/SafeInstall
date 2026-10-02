@@ -83,6 +83,7 @@ class ResultPresentation:
     target_name: str
     risk_level: Severity
     risk_label: str
+    coverage_notice: str
     capabilities: tuple[CapabilityItem, ...]
     behaviors: tuple[str, ...]
     bounded_checks: tuple[str, ...]
@@ -99,19 +100,28 @@ def present_report(report: ScanReport, catalog: Catalog) -> ResultPresentation:
     """Build localized overview text while preserving the technical report unchanged."""
 
     display_level = Severity.LOW if report.risk.level is Severity.INFO else report.risk.level
+    partial = report.coverage.status == "partial"
     observed = set(report.risk.capabilities.observed)
     capabilities = tuple(
         CapabilityItem(
             capability=capability,
             label=catalog.text(f"capability.{capability.value}"),
             observed=capability in observed,
-            value=catalog.text("common.yes" if capability in observed else "common.no"),
+            value=catalog.text(
+                "common.yes"
+                if capability in observed
+                else ("common.unknown" if partial else "common.no")
+            ),
         )
         for capability in Capability
     )
     behaviors = tuple(item.label for item in capabilities if item.observed)
     if not behaviors:
-        behaviors = (catalog.text("result.no_high_impact_capability"),)
+        behaviors = (
+            catalog.text(
+                "result.partial_no_capability" if partial else "result.no_high_impact_capability"
+            ),
+        )
 
     finding_categories = {finding.category for finding in report.findings}
     bounded_checks: list[str] = []
@@ -121,6 +131,8 @@ def present_report(report: ScanReport, catalog: Catalog) -> ResultPresentation:
         bounded_checks.append(catalog.text("result.no_secret_pattern"))
     if not finding_categories.intersection({"workflow_permission", "workflow_privilege"}):
         bounded_checks.append(catalog.text("result.no_workflow_permission_pattern"))
+    if partial:
+        bounded_checks.clear()
 
     top_findings = tuple(
         TopFinding(
@@ -135,23 +147,56 @@ def present_report(report: ScanReport, catalog: Catalog) -> ResultPresentation:
         )
         for finding in report.findings[:5]
     )
+    risk_label = f"{display_level.value.upper()} · {catalog.text(f'risk.{display_level.value}')}"
+    advice = catalog.text(f"advice.{display_level.value}")
+    if partial:
+        risk_label = catalog.text("coverage.incomplete")
+        advice = catalog.text("coverage.advice")
+        if display_level in {Severity.MEDIUM, Severity.HIGH, Severity.CRITICAL}:
+            risk_label += " · " + catalog.text(
+                "coverage.observed_risk", risk=catalog.text(f"risk.{display_level.value}")
+            )
+            advice += " " + catalog.text(f"advice.{display_level.value}")
     return ResultPresentation(
         target_name=redact_text(report.target.display_name),
         risk_level=display_level,
-        risk_label=(
-            f"{display_level.value.upper()} · {catalog.text(f'risk.{display_level.value}')}"
-        ),
+        risk_label=risk_label,
+        coverage_notice=coverage_notice(report, catalog, limit=5),
         capabilities=capabilities,
         behaviors=behaviors,
         bounded_checks=tuple(bounded_checks),
         top_findings=top_findings,
-        why=_why(report, catalog),
-        recommendation=catalog.text(f"advice.{display_level.value}"),
+        why=catalog.text("coverage.why") if partial else _why(report, catalog),
+        recommendation=advice,
         files_scanned=report.target.files_scanned,
         dependencies=len(report.dependencies),
         duration_ms=report.target.scan_duration_ms,
         ai=_present_ai(report, catalog),
     )
+
+
+def coverage_notice(report: ScanReport, catalog: Catalog, *, limit: int = 100) -> str:
+    """Localize bounded discovery omissions for both desktop result views."""
+
+    if report.coverage.status != "partial":
+        return ""
+    paths = report.coverage.skipped_paths[:limit]
+    lines = [
+        catalog.text(
+            "coverage.summary",
+            scanned=report.target.files_scanned,
+            count=report.coverage.skipped_count,
+        )
+    ]
+    lines.extend(
+        f"{redact_text(item.path)}: {catalog.text(f'coverage.reason.{item.reason.value}')}"
+        for item in paths
+    )
+    if len(paths) < report.coverage.skipped_count:
+        lines.append(
+            catalog.text("coverage.omitted", shown=len(paths), count=report.coverage.skipped_count)
+        )
+    return "\n".join(lines)
 
 
 def _present_ai(report: ScanReport, catalog: Catalog) -> AIPresentation | None:

@@ -54,8 +54,20 @@ loader. Both transports use temporary directories and do not run checkout script
 code. Anonymous API rate limiting and compromise of GitHub/TLS remain residual availability and
 supply-chain risks.
 
-## Secret handling
+## Scan completeness
 
+Resource limits and text decoding failures must not be presented as clean security results.
+Discovery reports supported paths that were too large, unreadable, undecodable, or unsafe to
+traverse. It keeps an exact skip count and at most 100 redacted relative paths, including failed
+directory reads. Zero-source targets fail before optional AI is considered. Partial reports
+preserve observed risks while marking their coverage and using CLI exit status 3.
+
+No size limit is relaxed, no decoding fallback is attempted, and skipped content is not read by
+another scanner. Existing ignored directories and unsupported formats remain outside scope.
+Desktop and exported reports distinguish an unobserved capability from an unknown result due
+to omitted content. Path diagnostics are treated as untrusted data at rendering boundaries.
+
+## Secret handling
 Detection values are masked at source. Evidence, metadata, exception details, target identifiers,
 JSON, Markdown, terminal output, and AI payloads pass through centralized redaction. Redaction is
 defense in depth, not a complete data-loss-prevention system: unknown secret formats or secret

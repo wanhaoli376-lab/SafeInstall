@@ -13,6 +13,10 @@ class InputError(SafeInstallError):
     """Raised when a scan target cannot be loaded safely."""
 
 
+class NoScannableFilesError(InputError):
+    """Raised when discovery cannot provide any supported text to the scanners."""
+
+
 class UnsafeArchiveError(InputError):
     """Raised when an archive violates extraction safety limits."""
 

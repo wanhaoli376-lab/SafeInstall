@@ -1,6 +1,11 @@
 import io
 import logging
+from pathlib import Path
 
+import pytest
+
+from safeinstall.core import scan_target
+from safeinstall.exceptions import InputError
 from safeinstall.logging import RedactingFormatter
 from safeinstall.models import SourceFile
 from safeinstall.redaction import redact_data, redact_text
@@ -117,3 +122,19 @@ def test_terminal_and_bidi_control_characters_are_made_visible() -> None:
     assert "\x1b" not in redacted
     assert "\N{RIGHT-TO-LEFT OVERRIDE}" not in redacted
     assert redacted == "report\\u001b[31m\\u202e.py"
+
+
+def test_discovery_redacts_skipped_paths_before_the_report_and_error_boundary(
+    tmp_path: Path,
+) -> None:
+    skipped = tmp_path / f"{_OPENAI_KEY_FIXTURE}.py"
+    skipped.write_bytes(b"\x81fixture")
+    (tmp_path / "ok.py").write_text("# fixture\n", encoding="utf-8")
+
+    report = scan_target(tmp_path)
+
+    assert _OPENAI_KEY_FIXTURE not in report.model_dump_json()
+    assert report.coverage.skipped_count == 1
+    with pytest.raises(InputError) as error:
+        scan_target(skipped)
+    assert _OPENAI_KEY_FIXTURE not in str(error.value)

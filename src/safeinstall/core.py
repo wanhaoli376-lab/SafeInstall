@@ -14,8 +14,8 @@ from safeinstall.analysis.ai_analysis import OpenAIAnalyzer
 from safeinstall.analysis.behavior import PythonBehaviorScanner
 from safeinstall.analysis.permissions import SensitivePathScanner
 from safeinstall.config import ScanConfig
-from safeinstall.constants import ANALYSIS_SCOPE, DISCLAIMER
-from safeinstall.exceptions import InputError
+from safeinstall.constants import ANALYSIS_SCOPE, DISCLAIMER, SKIP_REASON_LABELS
+from safeinstall.exceptions import InputError, NoScannableFilesError
 from safeinstall.loaders.archive import ArchiveLoader
 from safeinstall.loaders.base import LoadedTarget, TargetLoader
 from safeinstall.loaders.discovery import FileDiscoverer
@@ -86,7 +86,17 @@ def scan_target(
     discoverer = FileDiscoverer()
 
     with loader.open(target) as loaded:
-        sources = discoverer.discover(loaded)
+        discovery = discoverer.discover_with_coverage(loaded)
+        sources = discovery.sources
+        if not sources:
+            details = "; ".join(
+                f"{item.path}: {SKIP_REASON_LABELS[item.reason]}"
+                for item in discovery.coverage.skipped_paths[:3]
+            )
+            raise NoScannableFilesError(
+                "No supported text files could be scanned. "
+                + (details or "Choose a supported source file or a folder containing source text.")
+            )
         target_identity = _target_identity(loaded, sources, started_at)
 
     findings, dependencies = _scan_sources(
@@ -107,6 +117,7 @@ def scan_target(
         safeinstall_version=__version__,
         target=summary,
         risk=risk,
+        coverage=discovery.coverage,
         findings=findings,
         dependencies=dependencies,
         ai_analysis=ai_result,

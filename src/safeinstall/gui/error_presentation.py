@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from safeinstall.exceptions import (
     AIUnavailableError,
     InputError,
+    NoScannableFilesError,
     RepositoryLoadError,
     UnsafeArchiveError,
 )
@@ -28,6 +29,8 @@ def present_error(error: Exception, catalog: Catalog) -> ErrorPresentation:
         key = "archive"
     elif isinstance(error, AIUnavailableError):
         key = "ai"
+    elif isinstance(error, NoScannableFilesError):
+        key = "no_sources"
     elif isinstance(error, InputError) and _looks_like_limit_error(str(error)):
         key = "limit"
     elif isinstance(error, InputError):

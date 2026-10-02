@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 )
 
 from safeinstall.gui.i18n import Catalog
+from safeinstall.gui.presentation import coverage_notice
 from safeinstall.models import Finding, FindingConfidence, ScanReport
 from safeinstall.redaction import redact_text
 
@@ -38,6 +39,9 @@ class TechnicalDetailsView(QWidget):
         self.title.setObjectName("Title")
         self.score = QLabel()
         self.score.setObjectName("Muted")
+        self.coverage_notice = self._plain_label()
+        self.coverage_notice.setObjectName("CoverageNotice")
+        self.coverage_notice.hide()
         self.limit_notice = QLabel()
         self.limit_notice.setObjectName("Muted")
         self.limit_notice.setWordWrap(True)
@@ -103,6 +107,7 @@ class TechnicalDetailsView(QWidget):
         layout.addWidget(self.back_button, alignment=Qt.AlignmentFlag.AlignLeft)
         layout.addWidget(self.title)
         layout.addWidget(self.score)
+        layout.addWidget(self.coverage_notice)
         layout.addWidget(self.limit_notice)
         layout.addWidget(self.finding_table)
         layout.addWidget(details)
@@ -145,9 +150,13 @@ class TechnicalDetailsView(QWidget):
     def set_report(self, report: ScanReport) -> None:
         self.report = report
         self._findings = report.findings[:MAX_UI_FINDINGS]
+        self.coverage_notice.setText(coverage_notice(report, self.catalog))
+        self.coverage_notice.setVisible(report.coverage.status == "partial")
         self.score.setText(
             self.catalog.text(
-                "technical.score",
+                "technical.partial_score"
+                if report.coverage.status == "partial"
+                else "technical.score",
                 level=report.risk.level.value.upper(),
                 score=report.risk.score,
             )

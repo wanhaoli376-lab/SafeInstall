@@ -1,16 +1,21 @@
 import json
 from datetime import UTC, datetime
+from pathlib import Path
 
 from rich.console import Console
 
+from safeinstall.core import scan_target
 from safeinstall.models import (
     Capability,
     CapabilitySummary,
     Evidence,
     Finding,
     RiskAssessment,
+    ScanCoverage,
     ScanReport,
     Severity,
+    SkippedPath,
+    SkipReason,
     TargetKind,
     TargetSummary,
 )
@@ -66,7 +71,7 @@ def _report() -> ScanReport:
 def test_json_report_has_stable_machine_readable_fields() -> None:
     data = json.loads(render_json(_report()))
 
-    assert data["schema_version"] == "1.0"
+    assert data["schema_version"] == "1.1"
     assert data["risk"]["level"] == "high"
     assert data["findings"][0]["evidence"][0] == {
         "path": "demo.py",
@@ -110,3 +115,47 @@ def test_reports_redact_secrets_and_markdown_keeps_evidence_as_code() -> None:
     assert secret not in markdown
     assert "<code>bad`](/unexpected).py:4</code>" in markdown
     assert "    [open](https://example.invalid)" in markdown
+
+
+def test_partial_reports_do_not_present_zero_score_as_overall_risk(tmp_path: Path) -> None:
+    (tmp_path / "ok.py").write_text("# fixture\n", encoding="utf-8")
+    (tmp_path / "broken.sh").write_bytes(b"\x81fixture")
+    report = scan_target(tmp_path)
+    console = Console(record=True, width=120, color_system=None)
+
+    render_terminal(report, console=console)
+    markdown = render_markdown(report)
+    terminal = console.export_text()
+
+    for output in (markdown, terminal):
+        assert "Scan incomplete" in output
+        assert "broken.sh" in output
+        assert "cannot be decoded as supported" in output
+        assert "Overall Risk" not in output
+        assert "scanned files only" in output
+        assert "UNKNOWN" in output
+
+    data = json.loads(render_json(report))
+    assert data["coverage"]["status"] == "partial"
+    assert data["coverage"]["skipped_count"] == 1
+
+
+def test_skipped_paths_are_redacted_and_rendered_as_data() -> None:
+    path = f"{_OPENAI_KEY_FIXTURE}/[red]<tag>|.sh"
+    coverage = ScanCoverage(
+        status="partial",
+        skipped_count=1,
+        skipped_paths=(SkippedPath(path=path, reason=SkipReason.UNREADABLE),),
+    )
+    report = _report().model_copy(update={"coverage": coverage})
+    console = Console(record=True, width=160, color_system=None)
+
+    render_terminal(report, console=console)
+    markdown = render_markdown(report)
+    terminal = console.export_text()
+
+    for output in (render_json(report), markdown, terminal):
+        assert _OPENAI_KEY_FIXTURE not in output
+        assert "sk-****...3456" in output
+    assert "[red]<tag>|.sh" in terminal
+    assert "[red]&lt;tag&gt;&#124;.sh" in markdown
